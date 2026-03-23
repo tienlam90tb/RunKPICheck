@@ -40,9 +40,15 @@ db.serialize(() => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     athlete_id TEXT,
     name TEXT,
+    email TEXT,
     access_token TEXT,
     refresh_token TEXT
   )`);
+
+  // In case existing DB before add email field
+  db.run(`ALTER TABLE users ADD COLUMN email TEXT`, (err) => {
+    // ignore if already exists
+  });
 });
 
 // ===== GET STRAVA DATA =====
@@ -148,10 +154,10 @@ app.get('/api/admin/employees', (req, res) => {
        CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected,
        COALESCE(r.today_km, 0) as today_km
      FROM employees e
-     LEFT JOIN users u ON LOWER(COALESCE(e.strava_username, e.name)) = LOWER(u.name)
+     LEFT JOIN users u ON LOWER(COALESCE(e.strava_username, e.email, e.name)) = LOWER(COALESCE(u.name, u.email))
      LEFT JOIN (
        SELECT name, SUM(distance) as today_km FROM runs WHERE date = ? GROUP BY name
-     ) r ON LOWER(COALESCE(e.strava_username, e.name)) = LOWER(r.name)
+     ) r ON LOWER(COALESCE(e.strava_username, e.email, e.name)) = LOWER(r.name)
      ORDER BY e.id`,
     [today],
     (err, rows) => {
@@ -404,10 +410,12 @@ app.get('/auth/callback', async (req, res) => {
     });
 
     const { access_token, refresh_token, athlete } = tokenRes.data;
+    const stravaName = athlete.username || `${athlete.firstname || ''} ${athlete.lastname || ''}`.trim();
+    const stravaEmail = athlete.email || null;
 
     db.run(
-      `INSERT INTO users (athlete_id, name, access_token, refresh_token) VALUES (?, ?, ?, ?)`,
-      [athlete.id, athlete.username || athlete.firstname, access_token, refresh_token]
+      `INSERT INTO users (athlete_id, name, email, access_token, refresh_token) VALUES (?, ?, ?, ?, ?)`,
+      [athlete.id, stravaName, stravaEmail, access_token, refresh_token]
     );
 
     res.send('✅ Connected successfully! You can close this tab.');
