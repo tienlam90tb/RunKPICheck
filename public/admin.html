@@ -478,6 +478,10 @@
   async function editEmployee(id, name, email, strava_username) {
     const newName = prompt('Ten hien thi (full):', name);
     if (newName === null) return;
+    if (!newName.trim()) {
+      alert('Ten khong duoc rong');
+      return;
+    }
 
     const newStrava = prompt('Strava username:', strava_username || '');
     if (newStrava === null) return;
