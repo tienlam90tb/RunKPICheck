@@ -32,6 +32,7 @@ const db = new sqlite3.Database('./data.db');
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    athlete_id TEXT,
     name TEXT,
     distance REAL,
     date TEXT
@@ -45,7 +46,10 @@ db.serialize(() => {
     refresh_token TEXT
   )`);
 
-  // In case existing DB before add email field
+  // In case existing DB before add athlete_id or email fields
+  db.run(`ALTER TABLE runs ADD COLUMN athlete_id TEXT`, (err) => {
+    // ignore if already exists
+  });
   db.run(`ALTER TABLE users ADD COLUMN email TEXT`, (err) => {
     // ignore if already exists
   });
@@ -73,10 +77,11 @@ async function fetchStrava() {
 
     runs.forEach((run) => {
       const km = run.distance / 1000;
+      const athleteId = run.athlete && run.athlete.id ? run.athlete.id : null;
 
       db.run(
-        `INSERT INTO runs (name, distance, date) VALUES (?, ?, ?)`,
-        [run.name, km, today]
+        `INSERT INTO runs (athlete_id, name, distance, date) VALUES (?, ?, ?, ?)`,
+        [athleteId, run.name, km, today]
       );
     });
 
@@ -154,10 +159,13 @@ app.get('/api/admin/employees', (req, res) => {
        CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected,
        COALESCE(r.today_km, 0) as today_km
      FROM employees e
-     LEFT JOIN users u ON LOWER(COALESCE(e.strava_username, e.email, e.name)) = LOWER(COALESCE(u.name, u.email))
+     LEFT JOIN users u ON
+       LOWER(e.strava_username) = LOWER(u.name)
+       OR LOWER(e.email) = LOWER(u.email)
+       OR LOWER(e.name) = LOWER(u.name)
      LEFT JOIN (
-       SELECT name, SUM(distance) as today_km FROM runs WHERE date = ? GROUP BY name
-     ) r ON LOWER(COALESCE(e.strava_username, e.email, e.name)) = LOWER(r.name)
+       SELECT athlete_id, SUM(distance) as today_km FROM runs WHERE date = ? GROUP BY athlete_id
+     ) r ON u.athlete_id = r.athlete_id
      ORDER BY e.id`,
     [today],
     (err, rows) => {
@@ -168,12 +176,12 @@ app.get('/api/admin/employees', (req, res) => {
 
 // Add employee
 app.post('/api/admin/employees', (req, res) => {
-  const { name, email } = req.body;
+  const { name, email, strava_username } = req.body;
   if (!name) return res.json({ success: false, error: 'Thieu ten nhan vien' });
 
   db.run(
-    `INSERT INTO employees (name, email) VALUES (?, ?)`,
-    [name, email || null],
+    `INSERT INTO employees (name, email, strava_username) VALUES (?, ?, ?)`,
+    [name, email || null, strava_username || null],
     function (err) {
       if (err) return res.json({ success: false, error: err.message });
       res.json({ success: true, id: this.lastID });
@@ -217,7 +225,11 @@ app.get('/api/admin/report', (req, res) => {
        COALESCE(SUM(r.distance), 0) as total_km,
        COUNT(DISTINCT r.date) as run_days
      FROM employees e
-     LEFT JOIN runs r ON LOWER(e.name) = LOWER(r.name)
+     LEFT JOIN users u ON
+       LOWER(e.strava_username) = LOWER(u.name)
+       OR LOWER(e.email) = LOWER(u.email)
+       OR LOWER(e.name) = LOWER(u.name)
+     LEFT JOIN runs r ON r.athlete_id = u.athlete_id
      GROUP BY e.name
      ORDER BY total_km DESC`,
     (err, rows) => {
@@ -394,7 +406,7 @@ app.listen(3000, () => console.log('Server running on port 3000'));
 
 // ===== AUTH ROUTES =====
 app.get('/auth/login', (req, res) => {
-  const url = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.STRAVA_REDIRECT_URI}&approval_prompt=auto&scope=activity:read_all`;
+  const url = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.STRAVA_REDIRECT_URI}&approval_prompt=auto&scope=read_all`;
   res.redirect(url);
 });
 
@@ -497,8 +509,8 @@ async function fetchAllUsers() {
           const runDate = new Date(run.start_date).toDateString();
 
           db.run(
-            `INSERT INTO runs (name, distance, date) VALUES (?, ?, ?)`,
-            [user.name, km, runDate]
+            `INSERT INTO runs (athlete_id, name, distance, date) VALUES (?, ?, ?, ?)`,
+            [user.athlete_id, user.name, km, runDate]
           );
         });
 
