@@ -272,6 +272,7 @@
     <h2>Them nhan vien</h2>
     <div class="form-row">
       <input type="text" id="input-name" placeholder="Ten nhan vien" />
+      <input type="text" id="input-strava" placeholder="Strava username (nap sau)" />
       <input type="text" id="input-email" placeholder="Email (tuy chon)" />
       <button class="btn btn-primary" onclick="addEmployee()">Them</button>
     </div>
@@ -300,6 +301,7 @@
             <th>Ten</th>
             <th>Email</th>
             <th>Strava</th>
+            <th>Strava username</th>
             <th>KM hom nay</th>
             <th>KPI</th>
             <th>Hanh dong</th>
@@ -363,6 +365,7 @@
   // Add employee
   async function addEmployee() {
     const name = document.getElementById('input-name').value.trim();
+    const strava_username = document.getElementById('input-strava').value.trim();
     const email = document.getElementById('input-email').value.trim();
 
     if (!name) {
@@ -374,13 +377,14 @@
       const res = await fetch(API + '/api/admin/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email })
+        body: JSON.stringify({ name, email, strava_username })
       });
       const data = await res.json();
 
       if (data.success) {
         showAlert('Da them: ' + name, 'success');
         document.getElementById('input-name').value = '';
+        document.getElementById('input-strava').value = '';
         document.getElementById('input-email').value = '';
         loadEmployees();
       } else {
@@ -436,9 +440,13 @@
         <td><strong>${emp.name}</strong></td>
         <td style="color:#94a3b8">${emp.email || '-'}</td>
         <td><span class="badge ${isConnected ? 'badge-connected' : 'badge-pending'}">${isConnected ? 'Da ket noi' : 'Cho ket noi'}</span></td>
+        <td>${emp.strava_username || '-'}</td>
         <td>${km} km</td>
         <td><span class="badge ${isPass ? 'badge-ok' : 'badge-fail'}">${isPass ? 'Dat' : 'Chua dat'}</span></td>
-        <td><button class="btn btn-danger btn-sm" onclick="confirmDelete(${emp.id}, '${emp.name}')">Xoa</button></td>
+        <td>
+          <button class="btn btn-sm" style="background:#64748b;color:#fff;" onclick="editEmployee(${emp.id}, '${emp.name}', '${emp.email || ''}', '${emp.strava_username || ''}')">Sua</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete(${emp.id}, '${emp.name}')">Xoa</button>
+        </td>
       `;
       tbody.appendChild(row);
     });
@@ -465,6 +473,34 @@
   function closeModal() {
     document.getElementById('modal-delete').classList.remove('active');
     deleteId = null;
+  }
+
+  async function editEmployee(id, name, email, strava_username) {
+    const newName = prompt('Ten hien thi (full):', name);
+    if (newName === null) return;
+
+    const newStrava = prompt('Strava username:', strava_username || '');
+    if (newStrava === null) return;
+
+    const newEmail = prompt('Email (tuy chon):', email || '');
+    if (newEmail === null) return;
+
+    try {
+      const res = await fetch(API + '/api/admin/employees/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim(), email: newEmail.trim(), strava_username: newStrava.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert('Da cap nhat nhan vien', 'success');
+        loadEmployees();
+      } else {
+        showAlert(data.error || 'Loi', 'error');
+      }
+    } catch (err) {
+      showAlert('Loi ket noi server', 'error');
+    }
   }
 
   document.getElementById('btn-confirm-delete').addEventListener('click', async () => {

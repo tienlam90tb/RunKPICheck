@@ -131,21 +131,27 @@ db.run(`CREATE TABLE IF NOT EXISTS employees (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   email TEXT,
+  strava_username TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 )`);
+
+// Add column if missing for older DB versions
+db.run(`ALTER TABLE employees ADD COLUMN strava_username TEXT`, (err) => {
+  // ignore error if column exists already
+});
 
 // Get all employees with today's KM and strava status
 app.get('/api/admin/employees', (req, res) => {
   const today = new Date().toDateString();
   db.all(
-    `SELECT e.id, e.name, e.email,
+    `SELECT e.id, e.name, e.email, e.strava_username,
        CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected,
        COALESCE(r.today_km, 0) as today_km
      FROM employees e
-     LEFT JOIN users u ON LOWER(e.name) = LOWER(u.name)
+     LEFT JOIN users u ON LOWER(COALESCE(e.strava_username, e.name)) = LOWER(u.name)
      LEFT JOIN (
        SELECT name, SUM(distance) as today_km FROM runs WHERE date = ? GROUP BY name
-     ) r ON LOWER(e.name) = LOWER(r.name)
+     ) r ON LOWER(COALESCE(e.strava_username, e.name)) = LOWER(r.name)
      ORDER BY e.id`,
     [today],
     (err, rows) => {
@@ -175,6 +181,27 @@ app.delete('/api/admin/employees/:id', (req, res) => {
     if (err) return res.json({ success: false, error: err.message });
     res.json({ success: true });
   });
+});
+
+// Update employee (name/email/strava_username)
+app.patch('/api/admin/employees/:id', (req, res) => {
+  const { name, email, strava_username } = req.body;
+  const fields = [];
+  const values = [];
+  if (name) { fields.push('name = ?'); values.push(name); }
+  if (email) { fields.push('email = ?'); values.push(email); }
+  if (strava_username) { fields.push('strava_username = ?'); values.push(strava_username); }
+  if (!fields.length) return res.json({ success: false, error: 'No fields to update' });
+  values.push(req.params.id);
+
+  db.run(
+    `UPDATE employees SET ${fields.join(', ')} WHERE id = ?`,
+    values,
+    function (err) {
+      if (err) return res.json({ success: false, error: err.message });
+      res.json({ success: true });
+    }
+  );
 });
 
 // Monthly report
@@ -417,9 +444,13 @@ async function refreshAccessToken(user) {
   }
 }
 
-// ===== FETCH ALL USERS DATA =====
+// ===== FETCH ALL USERS DATA (LAST 7 DAYS) =====
 async function fetchAllUsers() {
   db.all('SELECT * FROM users', async (err, users) => {
+    // Calculate date range: last 7 days
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
     for (const user of users) {
       try {
         let token = user.access_token;
@@ -446,22 +477,24 @@ async function fetchAllUsers() {
           );
         }
 
-        const today = new Date().toDateString();
-
-        const runs = res.data.filter(
-          (a) =>
-            a.type === 'Run' &&
-            new Date(a.start_date).toDateString() === today
-        );
+        // Filter runs from last 7 days
+        const runs = res.data.filter((a) => {
+          if (a.type !== 'Run') return false;
+          const activityDate = new Date(a.start_date);
+          return activityDate >= sevenDaysAgo && activityDate <= now;
+        });
 
         runs.forEach((run) => {
           const km = run.distance / 1000;
+          const runDate = new Date(run.start_date).toDateString();
 
           db.run(
             `INSERT INTO runs (name, distance, date) VALUES (?, ?, ?)`,
-            [user.name, km, today]
+            [user.name, km, runDate]
           );
         });
+
+        console.log(`Synced ${runs.length} runs for ${user.name}`);
       } catch (err) {
         console.error('Error user:', user.name);
       }
@@ -469,9 +502,9 @@ async function fetchAllUsers() {
   });
 }
 
-// Replace cron job:
-cron.schedule('0 20 * * *', () => {
-  console.log('Running daily sync (all users)...');
+// Replace cron job (Friday 3PM only):
+cron.schedule('0 15 * * 5', () => {
+  console.log('Running weekly sync (all users, last 7 days)...');
   fetchAllUsers();
 });
 
