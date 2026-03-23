@@ -424,26 +424,66 @@ app.get('/auth/callback', async (req, res) => {
     const { access_token, refresh_token, athlete } = tokenRes.data;
     const stravaName = athlete.username || `${athlete.firstname || ''} ${athlete.lastname || ''}`.trim();
     const stravaEmail = athlete.email || null;
+    const stravaUsername = athlete.username || null;
 
-    // Check if user already exists by athlete_id
+    const linkEmployee = () => {
+      db.get(
+        `SELECT id, strava_username FROM employees
+         WHERE (email IS NOT NULL AND LOWER(email) = LOWER(?))
+           OR (strava_username IS NOT NULL AND LOWER(strava_username) = LOWER(?))
+           OR (name IS NOT NULL AND LOWER(name) = LOWER(?))
+         LIMIT 1`,
+        [stravaEmail, stravaUsername, stravaName],
+        (err, emp) => {
+          if (err) return;
+          if (emp) {
+            const updates = [];
+            const params = [];
+            if (stravaUsername && (!emp.strava_username || emp.strava_username.toLowerCase() !== stravaUsername.toLowerCase())) {
+              updates.push('strava_username = ?');
+              params.push(stravaUsername);
+            }
+            if (updates.length) {
+              params.push(emp.id);
+              db.run(`UPDATE employees SET ${updates.join(', ')} WHERE id = ?`, params);
+            }
+          } else {
+            // Create new employee entry automatically (optional, reduces manual copy)
+            db.run(
+              `INSERT INTO employees (name, email, strava_username) VALUES (?, ?, ?)`,
+              [stravaName, stravaEmail, stravaUsername]
+            );
+          }
+        }
+      );
+    };
+
+    // Upsert user by athlete_id
     db.get('SELECT id FROM users WHERE athlete_id = ?', [athlete.id], (err, row) => {
       if (row) {
-        // Update existing user
         db.run(
           `UPDATE users SET name = ?, email = ?, access_token = ?, refresh_token = ? WHERE athlete_id = ?`,
-          [stravaName, stravaEmail, access_token, refresh_token, athlete.id]
+          [stravaName, stravaEmail, access_token, refresh_token, athlete.id],
+          (updateErr) => {
+            if (updateErr) return res.send('❌ Error updating user');
+            linkEmployee();
+            res.send('✅ Updated connection successfully! You can close this tab.');
+          }
         );
-        res.send('✅ Updated connection successfully! You can close this tab.');
       } else {
-        // Insert new user
         db.run(
           `INSERT INTO users (athlete_id, name, email, access_token, refresh_token) VALUES (?, ?, ?, ?, ?)`,
-          [athlete.id, stravaName, stravaEmail, access_token, refresh_token]
+          [athlete.id, stravaName, stravaEmail, access_token, refresh_token],
+          (insertErr) => {
+            if (insertErr) return res.send('❌ Error inserting user');
+            linkEmployee();
+            res.send('✅ Connected successfully! You can close this tab.');
+          }
         );
-        res.send('✅ Connected successfully! You can close this tab.');
       }
     });
   } catch (err) {
+    console.error(err);
     res.send('❌ Error connecting Strava');
   }
 });
