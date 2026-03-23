@@ -202,9 +202,9 @@ app.patch('/api/admin/employees/:id', (req, res) => {
   const { name, email, strava_username } = req.body;
   const fields = [];
   const values = [];
-  if (name) { fields.push('name = ?'); values.push(name); }
-  if (email) { fields.push('email = ?'); values.push(email); }
-  if (strava_username) { fields.push('strava_username = ?'); values.push(strava_username); }
+  if (name && name.trim()) { fields.push('name = ?'); values.push(name.trim()); }
+  if (email !== undefined) { fields.push('email = ?'); values.push(email ? email.trim() : null); }
+  if (strava_username !== undefined) { fields.push('strava_username = ?'); values.push(strava_username ? strava_username.trim() : null); }
   if (!fields.length) return res.json({ success: false, error: 'No fields to update' });
   values.push(req.params.id);
 
