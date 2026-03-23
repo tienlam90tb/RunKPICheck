@@ -425,12 +425,24 @@ app.get('/auth/callback', async (req, res) => {
     const stravaName = athlete.username || `${athlete.firstname || ''} ${athlete.lastname || ''}`.trim();
     const stravaEmail = athlete.email || null;
 
-    db.run(
-      `INSERT INTO users (athlete_id, name, email, access_token, refresh_token) VALUES (?, ?, ?, ?, ?)`,
-      [athlete.id, stravaName, stravaEmail, access_token, refresh_token]
-    );
-
-    res.send('✅ Connected successfully! You can close this tab.');
+    // Check if user already exists by athlete_id
+    db.get('SELECT id FROM users WHERE athlete_id = ?', [athlete.id], (err, row) => {
+      if (row) {
+        // Update existing user
+        db.run(
+          `UPDATE users SET name = ?, email = ?, access_token = ?, refresh_token = ? WHERE athlete_id = ?`,
+          [stravaName, stravaEmail, access_token, refresh_token, athlete.id]
+        );
+        res.send('✅ Updated connection successfully! You can close this tab.');
+      } else {
+        // Insert new user
+        db.run(
+          `INSERT INTO users (athlete_id, name, email, access_token, refresh_token) VALUES (?, ?, ?, ?, ?)`,
+          [athlete.id, stravaName, stravaEmail, access_token, refresh_token]
+        );
+        res.send('✅ Connected successfully! You can close this tab.');
+      }
+    });
   } catch (err) {
     res.send('❌ Error connecting Strava');
   }
