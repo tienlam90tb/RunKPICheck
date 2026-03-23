@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>Running KPI</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 16px;
+      padding-bottom: 80px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .header p {
+      color: #94a3b8;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Summary Cards */
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .summary-card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .summary-card .number {
+      font-size: 28px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .summary-card .label {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    .summary-card.green .number { color: #4ade80; }
+    .summary-card.red .number { color: #f87171; }
+
+    /* Cards */
+    .card {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+
+    .card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Table */
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: #334155;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #334155;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .rank {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .rank-1 { background: #fbbf24; color: #0f172a; }
+    .rank-2 { background: #94a3b8; color: #0f172a; }
+    .rank-3 { background: #b45309; color: white; }
+    .rank-default { background: #334155; color: #94a3b8; }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-ok { background: #166534; color: #4ade80; }
+    .badge-fail { background: #7f1d1d; color: #f87171; }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      background: #1e293b;
+      color: #94a3b8;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      background: #38bdf8;
+      color: #0f172a;
+    }
+
+    /* Bottom Nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #1e293b;
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      border-top: 1px solid #334155;
+      z-index: 100;
+    }
+
+    .nav-item {
+      text-align: center;
+      color: #64748b;
+      font-size: 11px;
+      cursor: pointer;
+      transition: color 0.2s;
+      background: none;
+      border: none;
+    }
+
+    .nav-item.active { color: #38bdf8; }
+
+    .nav-item .icon {
+      font-size: 20px;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* User list */
+    .user-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #334155;
+    }
+
+    .user-item:last-child { border-bottom: none; }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .user-name { font-weight: 600; }
+    .user-km { color: #94a3b8; font-size: 13px; }
+    .user-status { font-size: 24px; }
+
+    /* Progress bar */
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #334155;
+      border-radius: 3px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .progress-green { background: #4ade80; }
+    .progress-yellow { background: #fbbf24; }
+    .progress-red { background: #f87171; }
+
+    /* Connect button */
+    .connect-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #fc4c02, #e8430a);
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      margin-top: 16px;
+    }
+
+    .connect-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #64748b;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #334155;
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* KPI target line */
+    .kpi-target {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #334155;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .kpi-target strong {
+      color: #fbbf24;
+    }
+
+    /* Chart container */
+    .chart-container {
+      position: relative;
+      height: 250px;
+    }
+
+    @media (min-width: 768px) {
+      body { padding: 24px; max-width: 800px; margin: 0 auto; }
+      .summary { grid-template-columns: repeat(3, 1fr); }
+      .header h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Page: Dashboard -->
+  <div id="page-dashboard" class="page active">
+    <div class="header">
+      <h1>Running KPI</h1>
+      <p id="date-display"></p>
+    </div>
+
+    <div class="summary">
+      <div class="summary-card">
+        <div class="number" id="total-members">-</div>
+        <div class="label">Thanh vien</div>
+      </div>
+      <div class="summary-card green">
+        <div class="number" id="total-pass">-</div>
+        <div class="label">Dat KPI</div>
+      </div>
+      <div class="summary-card red">
+        <div class="number" id="total-fail">-</div>
+        <div class="label">Chua dat</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('today')">Hom nay</button>
+      <button class="tab" onclick="switchTab('month')">Thang nay</button>
+    </div>
+
+    <div class="card">
+      <div class="kpi-target">
+        <span>KPI muc tieu</span>
+        <strong id="kpi-label">5 km / ngay</strong>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Ten</th>
+              <th>KM</th>
+              <th>Trang thai</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <tr><td colspan="4" class="loading"><div class="spinner"></div>Dang tai...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Bieu do xep hang</h2>
+      <div class="chart-container">
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page: Members -->
+  <div id="page-members" class="page">
+    <div class="header">
+      <h1>Thanh vien</h1>
+      <p>Danh sach thanh vien da ket noi</p>
+    </div>
+
+    <div class="card">
+      <div id="members-list">
+        <div class="loading"><div class="spinner"></div>Dang tai...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page: Connect -->
+  <div id="page-connect" class="page">
+    <div class="header">
+      <h1>Ket noi Strava</h1>
+      <p>Ket noi tai khoan Strava de tu dong dong bo</p>
+    </div>
+
+    <div class="card">
+      <p style="margin-bottom:12px; color:#94a3b8; font-size:14px; line-height:1.6;">
+        Buoc 1: Cai app Strava tren dien thoai<br>
+        Buoc 2: Tao tai khoan & bat GPS khi chay<br>
+        Buoc 3: Nhan nut ben duoi de ket noi
+      </p>
+      <a href="/auth/login" class="connect-btn">Ket noi Strava</a>
+    </div>
+
+    <div class="card">
+      <h2>Huong dan</h2>
+      <p style="color:#94a3b8; font-size:14px; line-height:1.8;">
+        - Tai Strava tu App Store (iOS) hoac Google Play (Android)<br>
+        - Dang ky tai khoan mien phi<br>
+        - Moi khi chay, mo Strava va nhan "Record"<br>
+        - He thong se tu dong lay du lieu moi ngay luc 20:00
+      </p>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="showPage('dashboard')">
+      <span class="icon">📊</span>
+      Dashboard
+    </button>
+    <button class="nav-item" onclick="showPage('members')">
+      <span class="icon">👥</span>
+      Thanh vien
+    </button>
+    <button class="nav-item" onclick="showPage('connect')">
+      <span class="icon">🔗</span>
+      Ket noi
+    </button>
+  </nav>
+
+  <script>
+    const API = window.location.origin;
+    const KPI_TARGET = 5;
+    let currentTab = 'today';
+    let chartInstance = null;
+
+    // Date display
+    document.getElementById('date-display').textContent =
+      new Date().toLocaleDateString('vi-VN', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      });
+
+    // Navigation
+    function showPage(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      event.currentTarget.classList.add('active');
+
+      if (page === 'members') loadMembers();
+    }
+
+    // Tabs
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+      document.getElementById('kpi-label').textContent =
+        tab === 'today' ? '5 km / ngay' : '150 km / thang';
+      loadData();
+    }
+
+    // Load dashboard data
+    async function loadData() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '<tr><td colspan="4" class="loading"><div class="spinner"></div>Dang tai...</td></tr>';
+
+      try {
+        const endpoint = currentTab === 'today' ? '/api/today' : '/api/month';
+        const res = await fetch(API + endpoint);
+        const data = await res.json();
+
+        const target = currentTab === 'today' ? KPI_TARGET : 150;
+
+        data.sort((a, b) => b.total - a.total);
+
+        // Summary
+        const pass = data.filter(d => d.total >= target).length;
+        document.getElementById('total-members').textContent = data.length;
+        document.getElementById('total-pass').textContent = pass;
+        document.getElementById('total-fail').textContent = data.length - pass;
+
+        // Table
+        tbody.innerHTML = '';
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:30px;">Chua co du lieu</td></tr>';
+          return;
+        }
+
+        data.forEach((item, i) => {
+          const rankClass = i < 3 ? 'rank-' + (i + 1) : 'rank-default';
+          const isPass = item.total >= target;
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td><div class="rank ${rankClass}">${i + 1}</div></td>
+            <td><strong>${item.name}</strong></td>
+            <td>${item.total.toFixed(2)} km</td>
+            <td><span class="badge ${isPass ? 'badge-ok' : 'badge-fail'}">${isPass ? 'Dat' : 'Chua dat'}</span></td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        // Chart
+        renderChart(data);
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#f87171;padding:30px;">Loi tai du lieu</td></tr>';
+      }
+    }
+
+    // Chart
+    function renderChart(data) {
+      const ctx = document.getElementById('chart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+
+      const target = currentTab === 'today' ? KPI_TARGET : 150;
+
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.map(d => d.name),
+          datasets: [{
+            label: 'KM',
+            data: data.map(d => d.total),
+            backgroundColor: data.map(d =>
+              d.total >= target ? 'rgba(74, 222, 128, 0.8)' : 'rgba(248, 113, 113, 0.8)'
+            ),
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            annotation: {
+              annotations: {
+                targetLine: {
+                  type: 'line',
+                  yMin: target,
+                  yMax: target,
+                  borderColor: '#fbbf24',
+                  borderWidth: 2,
+                  borderDash: [5, 5],
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#94a3b8', font: { size: 11 } },
+              grid: { display: false }
+            },
+            y: {
+              ticks: { color: '#94a3b8' },
+              grid: { color: '#1e293b' }
+            }
+          }
+        }
+      });
+    }
+
+    // Load members
+    async function loadMembers() {
+      const list = document.getElementById('members-list');
+      list.innerHTML = '<div class="loading"><div class="spinner"></div>Dang tai...</div>';
+
+      try {
+        const res = await fetch(API + '/api/members');
+        const members = await res.json();
+
+        if (members.length === 0) {
+          list.innerHTML = '<p style="text-align:center;color:#64748b;padding:20px;">Chua co thanh vien nao</p>';
+          return;
+        }
+
+        list.innerHTML = '';
+        members.forEach(m => {
+          const initial = (m.name || '?')[0].toUpperCase();
+          const km = m.total ? m.total.toFixed(2) : '0.00';
+          const isPass = (m.total || 0) >= KPI_TARGET;
+
+          const div = document.createElement('div');
+          div.className = 'user-item';
+          div.innerHTML = `
+            <div class="user-info">
+              <div class="avatar">${initial}</div>
+              <div>
+                <div class="user-name">${m.name}</div>
+                <div class="user-km">${km} km hom nay</div>
+                <div class="progress-bar">
+                  <div class="progress-fill ${isPass ? 'progress-green' : 'progress-red'}"
+                       style="width: ${Math.min((m.total || 0) / KPI_TARGET * 100, 100)}%"></div>
+                </div>
+              </div>
+            </div>
+            <div class="user-status">${isPass ? '✅' : '⏳'}</div>
+          `;
+          list.appendChild(div);
+        });
+      } catch (err) {
+        list.innerHTML = '<p style="text-align:center;color:#f87171;padding:20px;">Loi tai du lieu</p>';
+      }
+    }
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js');
+    }
+
+    // Init
+    loadData();
+  </script>
+</body>
+</html>

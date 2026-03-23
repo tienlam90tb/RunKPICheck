@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Running KPI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .container { max-width: 900px; margin: 0 auto; }
+
+    .header {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .header h1 { font-size: 24px; font-weight: 700; }
+    .header p { color: #94a3b8; font-size: 14px; margin-top: 4px; }
+
+    .card {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+
+    .card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-card .number {
+      font-size: 28px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .stat-card .label {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    .stat-card.green .number { color: #4ade80; }
+    .stat-card.red .number { color: #f87171; }
+    .stat-card.yellow .number { color: #fbbf24; }
+
+    /* Form */
+    .form-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    input, select {
+      flex: 1;
+      padding: 12px 14px;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+
+    .btn {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: #38bdf8; color: #0f172a; }
+    .btn-danger { background: #7f1d1d; color: #f87171; font-size: 12px; padding: 6px 12px; }
+    .btn-success { background: #166534; color: #4ade80; }
+    .btn-warning { background: #854d0e; color: #fbbf24; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      background: #334155;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #334155;
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-connected { background: #166534; color: #4ade80; }
+    .badge-pending { background: #854d0e; color: #fbbf24; }
+    .badge-ok { background: #166534; color: #4ade80; }
+    .badge-fail { background: #7f1d1d; color: #f87171; }
+
+    /* Actions bar */
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    /* Search */
+    .search-box {
+      margin-bottom: 16px;
+    }
+
+    .search-box input {
+      width: 100%;
+    }
+
+    /* Alert */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .alert-success { background: #166534; color: #4ade80; display: block; }
+    .alert-error { background: #7f1d1d; color: #f87171; display: block; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 500px;
+      width: 100%;
+    }
+
+    .modal h3 {
+      font-size: 18px;
+      margin-bottom: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    .btn-cancel {
+      background: #334155;
+      color: #94a3b8;
+    }
+
+    /* Back link */
+    .back-link {
+      color: #38bdf8;
+      text-decoration: none;
+      font-size: 14px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+
+    .table-wrapper { overflow-x: auto; }
+
+    @media (max-width: 768px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .form-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <a href="/" class="back-link">← Quay lai Dashboard</a>
+
+  <div class="header">
+    <h1>Quan ly nhan vien</h1>
+    <p>Admin Panel - Running KPI System</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="number" id="stat-total">0</div>
+      <div class="label">Tong nhan vien</div>
+    </div>
+    <div class="stat-card green">
+      <div class="number" id="stat-connected">0</div>
+      <div class="label">Da ket noi Strava</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="number" id="stat-pending">0</div>
+      <div class="label">Chua ket noi</div>
+    </div>
+    <div class="stat-card red">
+      <div class="number" id="stat-fail">0</div>
+      <div class="label">Chua dat KPI hom nay</div>
+    </div>
+  </div>
+
+  <!-- Alert -->
+  <div id="alert" class="alert"></div>
+
+  <!-- Add Employee -->
+  <div class="card">
+    <h2>Them nhan vien</h2>
+    <div class="form-row">
+      <input type="text" id="input-name" placeholder="Ten nhan vien" />
+      <input type="text" id="input-email" placeholder="Email (tuy chon)" />
+      <button class="btn btn-primary" onclick="addEmployee()">Them</button>
+    </div>
+    <p style="color:#64748b; font-size:12px;">Sau khi them, gui link ket noi Strava cho nhan vien</p>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-success btn-sm" onclick="syncAllData()">Dong bo du lieu ngay</button>
+    <button class="btn btn-warning btn-sm" onclick="exportCSV()">Xuat CSV</button>
+  </div>
+
+  <!-- Employee List -->
+  <div class="card">
+    <h2>Danh sach nhan vien (<span id="count">0</span>)</h2>
+
+    <div class="search-box">
+      <input type="text" id="search" placeholder="Tim kiem nhan vien..." oninput="filterTable()" />
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ten</th>
+            <th>Email</th>
+            <th>Strava</th>
+            <th>KM hom nay</th>
+            <th>KPI</th>
+            <th>Hanh dong</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr><td colspan="7" style="text-align:center;color:#64748b;padding:30px;">Dang tai...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- KPI Report -->
+  <div class="card">
+    <h2>Bao cao KPI thang nay</h2>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ten</th>
+            <th>Tong KM</th>
+            <th>So ngay chay</th>
+            <th>Trung binh/ngay</th>
+            <th>Trang thai</th>
+          </tr>
+        </thead>
+        <tbody id="report-body">
+          <tr><td colspan="6" style="text-align:center;color:#64748b;padding:30px;">Dang tai...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="modal-delete">
+  <div class="modal">
+    <h3>Xac nhan xoa</h3>
+    <p>Ban co chac muon xoa nhan vien <strong id="delete-name"></strong>?</p>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal()">Huy</button>
+      <button class="btn btn-danger" id="btn-confirm-delete">Xoa</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = window.location.origin;
+  const KPI_TARGET = 5;
+  let allEmployees = [];
+
+  // Show alert
+  function showAlert(msg, type) {
+    const el = document.getElementById('alert');
+    el.textContent = msg;
+    el.className = 'alert alert-' + type;
+    setTimeout(() => { el.className = 'alert'; }, 3000);
+  }
+
+  // Add employee
+  async function addEmployee() {
+    const name = document.getElementById('input-name').value.trim();
+    const email = document.getElementById('input-email').value.trim();
+
+    if (!name) {
+      showAlert('Vui long nhap ten nhan vien', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch(API + '/api/admin/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showAlert('Da them: ' + name, 'success');
+        document.getElementById('input-name').value = '';
+        document.getElementById('input-email').value = '';
+        loadEmployees();
+      } else {
+        showAlert(data.error || 'Loi khi them', 'error');
+      }
+    } catch (err) {
+      showAlert('Loi ket noi server', 'error');
+    }
+  }
+
+  // Load employees
+  async function loadEmployees() {
+    try {
+      const res = await fetch(API + '/api/admin/employees');
+      const data = await res.json();
+      allEmployees = data;
+
+      document.getElementById('count').textContent = data.length;
+
+      // Stats
+      const connected = data.filter(e => e.strava_connected).length;
+      const todayFail = data.filter(e => (e.today_km || 0) < KPI_TARGET).length;
+      document.getElementById('stat-total').textContent = data.length;
+      document.getElementById('stat-connected').textContent = connected;
+      document.getElementById('stat-pending').textContent = data.length - connected;
+      document.getElementById('stat-fail').textContent = todayFail;
+
+      renderTable(data);
+    } catch (err) {
+      document.getElementById('table-body').innerHTML =
+        '<tr><td colspan="7" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
+    }
+  }
+
+  // Render table
+  function renderTable(data) {
+    const tbody = document.getElementById('table-body');
+
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:30px;">Chua co nhan vien</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '';
+    data.forEach((emp, i) => {
+      const km = (emp.today_km || 0).toFixed(2);
+      const isPass = (emp.today_km || 0) >= KPI_TARGET;
+      const isConnected = emp.strava_connected;
+
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${i + 1}</td>
+        <td><strong>${emp.name}</strong></td>
+        <td style="color:#94a3b8">${emp.email || '-'}</td>
+        <td><span class="badge ${isConnected ? 'badge-connected' : 'badge-pending'}">${isConnected ? 'Da ket noi' : 'Cho ket noi'}</span></td>
+        <td>${km} km</td>
+        <td><span class="badge ${isPass ? 'badge-ok' : 'badge-fail'}">${isPass ? 'Dat' : 'Chua dat'}</span></td>
+        <td><button class="btn btn-danger btn-sm" onclick="confirmDelete(${emp.id}, '${emp.name}')">Xoa</button></td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  // Search filter
+  function filterTable() {
+    const q = document.getElementById('search').value.toLowerCase();
+    const filtered = allEmployees.filter(e =>
+      e.name.toLowerCase().includes(q) || (e.email || '').toLowerCase().includes(q)
+    );
+    renderTable(filtered);
+  }
+
+  // Delete employee
+  let deleteId = null;
+
+  function confirmDelete(id, name) {
+    deleteId = id;
+    document.getElementById('delete-name').textContent = name;
+    document.getElementById('modal-delete').classList.add('active');
+  }
+
+  function closeModal() {
+    document.getElementById('modal-delete').classList.remove('active');
+    deleteId = null;
+  }
+
+  document.getElementById('btn-confirm-delete').addEventListener('click', async () => {
+    if (!deleteId) return;
+    try {
+      const res = await fetch(API + '/api/admin/employees/' + deleteId, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showAlert('Da xoa nhan vien', 'success');
+        closeModal();
+        loadEmployees();
+      }
+    } catch (err) {
+      showAlert('Loi khi xoa', 'error');
+    }
+  });
+
+  // Sync data
+  async function syncAllData() {
+    showAlert('Dang dong bo du lieu...', 'success');
+    try {
+      const res = await fetch(API + '/api/admin/sync', { method: 'POST' });
+      const data = await res.json();
+      showAlert('Dong bo thanh cong!', 'success');
+      loadEmployees();
+      loadReport();
+    } catch (err) {
+      showAlert('Loi dong bo', 'error');
+    }
+  }
+
+  // Export CSV
+  function exportCSV() {
+    let csv = 'STT,Ten,Email,Strava,KM Hom Nay,KPI\n';
+    allEmployees.forEach((emp, i) => {
+      csv += `${i+1},"${emp.name}","${emp.email || ''}",${emp.strava_connected ? 'Da ket noi' : 'Chua'},${(emp.today_km||0).toFixed(2)},${(emp.today_km||0) >= KPI_TARGET ? 'Dat' : 'Chua dat'}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'running-kpi-' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showAlert('Da xuat file CSV', 'success');
+  }
+
+  // Load monthly report
+  async function loadReport() {
+    try {
+      const res = await fetch(API + '/api/admin/report');
+      const data = await res.json();
+
+      const tbody = document.getElementById('report-body');
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;">Chua co du lieu</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      data.sort((a, b) => b.total_km - a.total_km);
+      data.forEach((r, i) => {
+        const avg = r.run_days > 0 ? (r.total_km / r.run_days).toFixed(2) : '0.00';
+        const isPass = r.total_km >= 150;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${i + 1}</td>
+          <td><strong>${r.name}</strong></td>
+          <td>${r.total_km.toFixed(2)} km</td>
+          <td>${r.run_days} ngay</td>
+          <td>${avg} km</td>
+          <td><span class="badge ${isPass ? 'badge-ok' : 'badge-fail'}">${isPass ? 'Dat' : 'Chua dat'}</span></td>
+        `;
+        tbody.appendChild(row);
+      });
+    } catch (err) {
+      document.getElementById('report-body').innerHTML =
+        '<tr><td colspan="6" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
+    }
+  }
+
+  // Enter key to add
+  document.getElementById('input-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addEmployee();
+  });
+
+  // Init
+  loadEmployees();
+  loadReport();
+</script>
+</body>
+</html>
