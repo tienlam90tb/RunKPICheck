@@ -16,7 +16,7 @@
       padding: 16px;
     }
 
-    .container { max-width: 900px; margin: 0 auto; }
+    .container { max-width: 1400px; margin: 0 auto; }
 
     .header {
       text-align: center;
@@ -117,6 +117,7 @@
       width: 100%;
       border-collapse: collapse;
       font-size: 14px;
+      white-space: nowrap;
     }
 
     th {
@@ -127,12 +128,14 @@
       font-size: 12px;
       text-transform: uppercase;
       color: #94a3b8;
+      white-space: nowrap;
     }
 
     td {
-      padding: 12px;
+      padding: 10px 12px;
       border-bottom: 1px solid #334155;
       vertical-align: middle;
+      white-space: nowrap;
     }
 
     tr:last-child td { border-bottom: none; }
@@ -228,9 +231,20 @@
 
     .table-wrapper { overflow-x: auto; }
 
+    .btn-actions {
+      display: flex;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
     @media (max-width: 768px) {
       .stats { grid-template-columns: repeat(2, 1fr); }
       .form-row { flex-direction: column; }
+      body { padding: 10px; }
+    }
+
+    @media (min-width: 1200px) {
+      body { padding: 24px 40px; }
     }
   </style>
 </head>
@@ -435,6 +449,9 @@
       const isConnected = emp.strava_connected;
 
       const row = document.createElement('tr');
+      const safeName = emp.name.replace(/'/g, "\\'");
+      const safeEmail = (emp.email || '').replace(/'/g, "\\'");
+      const safeStrava = (emp.strava_username || '').replace(/'/g, "\\'");
       row.innerHTML = `
         <td>${i + 1}</td>
         <td><strong>${emp.name}</strong></td>
@@ -443,10 +460,10 @@
         <td>${emp.strava_username || '-'}</td>
         <td>${km} km</td>
         <td><span class="badge ${isPass ? 'badge-ok' : 'badge-fail'}">${isPass ? 'Dat' : 'Chua dat'}</span></td>
-        <td>
-          <button class="btn btn-sm" style="background:#64748b;color:#fff;" onclick="editEmployee(${emp.id}, '${emp.name}', '${emp.email || ''}', '${emp.strava_username || ''}')">Sua</button>
-          <button class="btn btn-danger btn-sm" onclick="confirmDelete(${emp.id}, '${emp.name}')">Xoa</button>
-        </td>
+        <td><div class="btn-actions">
+          <button class="btn btn-sm" style="background:#64748b;color:#fff;" onclick="editEmployee(${emp.id}, '${safeName}', '${safeEmail}', '${safeStrava}')">Sua</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete(${emp.id}, '${safeName}')">Xoa</button>
+        </div></td>
       `;
       tbody.appendChild(row);
     });
