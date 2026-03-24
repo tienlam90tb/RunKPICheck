@@ -287,11 +287,21 @@ app.get('/api/employees-list', (req, res) => {
   res.json(rows);
 });
 
+// ===== DEBUG: check strava config =====
+app.get('/api/debug/strava', (req, res) => {
+  res.json({
+    client_id: process.env.STRAVA_CLIENT_ID,
+    redirect_uri: process.env.STRAVA_REDIRECT_URI,
+    has_secret: !!process.env.STRAVA_CLIENT_SECRET
+  });
+});
+
 // ===== STRAVA AUTH =====
 app.get('/auth/login', (req, res) => {
   const employeeId = req.query.employee_id || '';
   const state = employeeId ? encodeURIComponent(employeeId) : '';
-  const url = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.STRAVA_REDIRECT_URI}&approval_prompt=auto&scope=activity:read_all&state=${state}`;
+  const redirectUri = encodeURIComponent(process.env.STRAVA_REDIRECT_URI);
+  const url = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${redirectUri}&approval_prompt=auto&scope=activity:read_all&state=${state}`;
   res.redirect(url);
 });
 
