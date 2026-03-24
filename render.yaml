@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: running-kpi
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: STRAVA_CLIENT_ID
+        value: 215316
+      - key: STRAVA_CLIENT_SECRET
+        value: d2b87b8945d8983cf56ae441183dc8aa06e00be7
+      - key: STRAVA_REDIRECT_URI
+        value: https://running-kpi.onrender.com/auth/callback
