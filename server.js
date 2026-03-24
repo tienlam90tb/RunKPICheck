@@ -1,11 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 const cron = require('node-cron');
 const cors = require('cors');
 const path = require('path');
-
 const crypto = require('crypto');
 
 const app = express();
@@ -41,13 +40,11 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// Protect all admin API routes (except login/logout)
 app.use('/api/admin', (req, res, next) => {
   if (req.path === '/login' || req.path === '/logout') return next();
   requireAdmin(req, res, next);
 });
 
-// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ===== HELPERS =====
@@ -65,226 +62,226 @@ function vnMonthRange() {
   };
 }
 
-// ===== DATABASE =====
-const db = new Database('./data.db');
-db.pragma('journal_mode = WAL');
+// ===== DATABASE (PostgreSQL) =====
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('render.com') ? { rejectUnauthorized: false } : false
+});
 
-db.exec(`CREATE TABLE IF NOT EXISTS runs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  athlete_id TEXT,
-  name TEXT,
-  distance REAL,
-  date TEXT,
-  proof TEXT
-)`);
+async function initDB() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS employees (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT,
+    strava_username TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  )`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  athlete_id TEXT UNIQUE,
-  name TEXT,
-  email TEXT,
-  access_token TEXT,
-  refresh_token TEXT,
-  employee_id INTEGER
-)`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    athlete_id TEXT UNIQUE,
+    name TEXT,
+    email TEXT,
+    access_token TEXT,
+    refresh_token TEXT,
+    employee_id INTEGER
+  )`);
 
-// Add columns if missing
-try { db.exec('ALTER TABLE runs ADD COLUMN proof TEXT'); } catch (e) {}
-try { db.exec('ALTER TABLE users ADD COLUMN employee_id INTEGER'); } catch (e) {}
+  await pool.query(`CREATE TABLE IF NOT EXISTS runs (
+    id SERIAL PRIMARY KEY,
+    athlete_id TEXT,
+    name TEXT,
+    distance REAL,
+    date TEXT,
+    proof TEXT
+  )`);
 
-db.exec(`CREATE TABLE IF NOT EXISTS employees (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  email TEXT,
-  strava_username TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
-)`);
+  console.log('Database tables ready');
+}
 
 // ===== DASHBOARD API =====
-app.get('/api/today', (req, res) => {
-  const today = vnToday();
-  const rows = db.prepare(
-    `SELECT e.name, COALESCE(SUM(r.distance), 0) as total
-     FROM employees e
-     LEFT JOIN users u ON u.employee_id = e.id
-     LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id) AND r.date = ?
-     GROUP BY e.id
-     ORDER BY total DESC`
-  ).all(today);
-  res.json(rows);
+app.get('/api/today', async (req, res) => {
+  try {
+    const today = vnToday();
+    const { rows } = await pool.query(
+      `SELECT e.name, COALESCE(SUM(r.distance), 0)::float as total
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id) AND r.date = $1
+       GROUP BY e.id, e.name
+       ORDER BY total DESC`, [today]
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
 });
 
-app.get('/api/month', (req, res) => {
-  const { start, end } = vnMonthRange();
-  const rows = db.prepare(
-    `SELECT e.name, COALESCE(SUM(r.distance), 0) as total
-     FROM employees e
-     LEFT JOIN users u ON u.employee_id = e.id
-     LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id)
-       AND r.date >= ? AND r.date <= ?
-     GROUP BY e.id
-     ORDER BY total DESC`
-  ).all(start, end);
-  res.json(rows);
+app.get('/api/month', async (req, res) => {
+  try {
+    const { start, end } = vnMonthRange();
+    const { rows } = await pool.query(
+      `SELECT e.name, COALESCE(SUM(r.distance), 0)::float as total
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id)
+         AND r.date >= $1 AND r.date <= $2
+       GROUP BY e.id, e.name
+       ORDER BY total DESC`, [start, end]
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
 });
 
-app.get('/api/members', (req, res) => {
-  const today = vnToday();
-  const rows = db.prepare(
-    `SELECT e.id, e.name, COALESCE(SUM(r.distance), 0) as total,
-       CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected
-     FROM employees e
-     LEFT JOIN users u ON u.employee_id = e.id
-     LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id) AND r.date = ?
-     GROUP BY e.id
-     ORDER BY total DESC`
-  ).all(today);
-  res.json(rows);
+app.get('/api/members', async (req, res) => {
+  try {
+    const today = vnToday();
+    const { rows } = await pool.query(
+      `SELECT e.id, e.name, COALESCE(SUM(r.distance), 0)::float as total,
+         CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id) AND r.date = $1
+       GROUP BY e.id, e.name, u.id
+       ORDER BY total DESC`, [today]
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
 });
 
 // ===== ADMIN API =====
-app.get('/api/admin/employees', (req, res) => {
-  const today = vnToday();
-  const rows = db.prepare(
-    `SELECT e.id, e.name, e.email, e.strava_username,
-       CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected,
-       u.athlete_id as linked_athlete_id,
-       COALESCE(r_today.today_km, 0) as today_km
-     FROM employees e
-     LEFT JOIN users u ON u.employee_id = e.id
-     LEFT JOIN (
-       SELECT athlete_id, SUM(distance) as today_km
-       FROM runs WHERE date = ?
-       GROUP BY athlete_id
-     ) r_today ON u.athlete_id = r_today.athlete_id OR r_today.athlete_id = 'manual_' || e.id
-     GROUP BY e.id
-     ORDER BY e.id`
-  ).all(today);
-  res.json(rows);
+app.get('/api/admin/employees', async (req, res) => {
+  try {
+    const today = vnToday();
+    const { rows } = await pool.query(
+      `SELECT e.id, e.name, e.email, e.strava_username,
+         CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected,
+         u.athlete_id as linked_athlete_id,
+         COALESCE(r_today.today_km, 0)::float as today_km
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN (
+         SELECT athlete_id, SUM(distance) as today_km
+         FROM runs WHERE date = $1
+         GROUP BY athlete_id
+       ) r_today ON u.athlete_id = r_today.athlete_id OR r_today.athlete_id = 'manual_' || e.id
+       GROUP BY e.id, e.name, e.email, e.strava_username, u.id, u.athlete_id, r_today.today_km
+       ORDER BY e.id`, [today]
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
 });
 
-app.post('/api/admin/employees', (req, res) => {
+app.post('/api/admin/employees', async (req, res) => {
   const { name, email, strava_username } = req.body;
   if (!name || !name.trim()) return res.json({ success: false, error: 'Thieu ten nhan vien' });
-
   try {
-    const result = db.prepare(
-      `INSERT INTO employees (name, email, strava_username) VALUES (?, ?, ?)`
-    ).run(name.trim(), email || null, strava_username || null);
-    res.json({ success: true, id: result.lastInsertRowid });
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
+    const { rows } = await pool.query(
+      'INSERT INTO employees (name, email, strava_username) VALUES ($1, $2, $3) RETURNING id',
+      [name.trim(), email || null, strava_username || null]
+    );
+    res.json({ success: true, id: rows[0].id });
+  } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
-app.patch('/api/admin/employees/:id', (req, res) => {
+app.patch('/api/admin/employees/:id', async (req, res) => {
   const { name, email, strava_username } = req.body;
   try {
-    const result = db.prepare(
-      `UPDATE employees SET name = ?, email = ?, strava_username = ? WHERE id = ?`
-    ).run(
-      name ? name.trim() : null,
-      email ? email.trim() : null,
-      strava_username ? strava_username.trim() : null,
-      req.params.id
+    const { rowCount } = await pool.query(
+      'UPDATE employees SET name = $1, email = $2, strava_username = $3 WHERE id = $4',
+      [name ? name.trim() : null, email ? email.trim() : null, strava_username ? strava_username.trim() : null, req.params.id]
     );
-    if (result.changes === 0) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
+    if (rowCount === 0) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
     res.json({ success: true });
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
+  } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
-app.delete('/api/admin/employees/:id', (req, res) => {
+app.delete('/api/admin/employees/:id', async (req, res) => {
   try {
-    db.prepare(`DELETE FROM employees WHERE id = ?`).run(req.params.id);
+    await pool.query('DELETE FROM employees WHERE id = $1', [req.params.id]);
     res.json({ success: true });
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
+  } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
-app.get('/api/admin/report', (req, res) => {
-  const { start, end } = vnMonthRange();
-  const rows = db.prepare(
-    `SELECT e.name,
-       COALESCE(SUM(r.distance), 0) as total_km,
-       COUNT(DISTINCT r.date) as run_days
-     FROM employees e
-     LEFT JOIN users u ON u.employee_id = e.id
-     LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id)
-       AND r.date >= ? AND r.date <= ?
-     GROUP BY e.id
-     ORDER BY total_km DESC`
-  ).all(start, end);
-  res.json(rows);
+app.get('/api/admin/report', async (req, res) => {
+  try {
+    const { start, end } = vnMonthRange();
+    const { rows } = await pool.query(
+      `SELECT e.name,
+         COALESCE(SUM(r.distance), 0)::float as total_km,
+         COUNT(DISTINCT r.date)::int as run_days
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id)
+         AND r.date >= $1 AND r.date <= $2
+       GROUP BY e.id, e.name
+       ORDER BY total_km DESC`, [start, end]
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
 });
 
 app.post('/api/admin/sync', async (req, res) => {
-  try {
-    await fetchAllUsers();
-    res.json({ success: true });
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
+  try { await fetchAllUsers(); res.json({ success: true }); }
+  catch (err) { res.json({ success: false, error: err.message }); }
 });
 
 // ===== EMPLOYEE SELF-REGISTER =====
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.json({ success: false, error: 'Vui long nhap ten' });
-
   const trimmed = name.trim();
-  // Check if name already exists
-  const existing = db.prepare('SELECT id FROM employees WHERE LOWER(name) = LOWER(?)').get(trimmed);
-  if (existing) {
-    return res.json({ success: true, id: existing.id, message: 'Ten da ton tai' });
-  }
-
   try {
-    const result = db.prepare('INSERT INTO employees (name) VALUES (?)').run(trimmed);
-    res.json({ success: true, id: result.lastInsertRowid });
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
+    const { rows: existing } = await pool.query('SELECT id FROM employees WHERE LOWER(name) = LOWER($1)', [trimmed]);
+    if (existing.length > 0) {
+      return res.json({ success: true, id: existing[0].id, message: 'Ten da ton tai' });
+    }
+    const { rows } = await pool.query('INSERT INTO employees (name) VALUES ($1) RETURNING id', [trimmed]);
+    res.json({ success: true, id: rows[0].id });
+  } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
 // ===== SUBMIT RUN (manual) =====
-app.post('/api/submit-run', (req, res) => {
+app.post('/api/submit-run', async (req, res) => {
   const { employee_id, distance, proof } = req.body;
   if (!employee_id || !distance || distance <= 0) {
     return res.json({ success: false, error: 'Du lieu khong hop le' });
   }
-
-  const emp = db.prepare('SELECT id, name FROM employees WHERE id = ?').get(employee_id);
-  if (!emp) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
-
-  const today = vnToday();
-  db.prepare('INSERT INTO runs (athlete_id, name, distance, date, proof) VALUES (?, ?, ?, ?, ?)')
-    .run('manual_' + emp.id, emp.name, distance, today, proof || null);
-
-  res.json({ success: true });
+  try {
+    const { rows } = await pool.query('SELECT id, name FROM employees WHERE id = $1', [employee_id]);
+    if (rows.length === 0) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
+    const emp = rows[0];
+    const today = vnToday();
+    await pool.query(
+      'INSERT INTO runs (athlete_id, name, distance, date, proof) VALUES ($1, $2, $3, $4, $5)',
+      ['manual_' + emp.id, emp.name, distance, today, proof || null]
+    );
+    res.json({ success: true });
+  } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
-app.get('/api/my-runs/:empId', (req, res) => {
-  const today = vnToday();
-  const rows = db.prepare(
-    'SELECT distance, proof FROM runs WHERE athlete_id = ? AND date = ?'
-  ).all('manual_' + req.params.empId, today);
-  res.json(rows);
+app.get('/api/my-runs/:empId', async (req, res) => {
+  try {
+    const today = vnToday();
+    const { rows } = await pool.query(
+      'SELECT distance, proof FROM runs WHERE athlete_id = $1 AND date = $2',
+      ['manual_' + req.params.empId, today]
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
 });
 
-// ===== EMPLOYEE LIST (for connect page) =====
-app.get('/api/employees-list', (req, res) => {
-  const rows = db.prepare(
-    `SELECT e.id, e.name,
-       CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected
-     FROM employees e
-     LEFT JOIN users u ON u.employee_id = e.id
-     GROUP BY e.id
-     ORDER BY e.name`
-  ).all();
-  res.json(rows);
+// ===== EMPLOYEE LIST (for connect/register page) =====
+app.get('/api/employees-list', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT e.id, e.name,
+         CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       GROUP BY e.id, e.name, u.id
+       ORDER BY e.name`
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
 });
 
 // ===== STRAVA AUTH =====
@@ -312,28 +309,30 @@ app.get('/auth/callback', async (req, res) => {
     const stravaName = athlete.username || `${athlete.firstname || ''} ${athlete.lastname || ''}`.trim();
     const athleteId = String(athlete.id);
 
-    // Upsert user record
-    const existing = db.prepare('SELECT id FROM users WHERE athlete_id = ?').get(athleteId);
-    if (existing) {
-      db.prepare('UPDATE users SET name = ?, access_token = ?, refresh_token = ?, employee_id = COALESCE(?, employee_id) WHERE athlete_id = ?')
-        .run(stravaName, access_token, refresh_token, employeeId, athleteId);
+    const { rows: existing } = await pool.query('SELECT id FROM users WHERE athlete_id = $1', [athleteId]);
+    if (existing.length > 0) {
+      await pool.query(
+        'UPDATE users SET name = $1, access_token = $2, refresh_token = $3, employee_id = COALESCE($4, employee_id) WHERE athlete_id = $5',
+        [stravaName, access_token, refresh_token, employeeId, athleteId]
+      );
     } else {
-      db.prepare('INSERT INTO users (athlete_id, name, access_token, refresh_token, employee_id) VALUES (?, ?, ?, ?, ?)')
-        .run(athleteId, stravaName, access_token, refresh_token, employeeId);
+      await pool.query(
+        'INSERT INTO users (athlete_id, name, access_token, refresh_token, employee_id) VALUES ($1, $2, $3, $4, $5)',
+        [athleteId, stravaName, access_token, refresh_token, employeeId]
+      );
     }
 
-    // Update employee strava_username
     if (employeeId) {
-      db.prepare('UPDATE employees SET strava_username = ? WHERE id = ?')
-        .run(stravaName, employeeId);
+      await pool.query('UPDATE employees SET strava_username = $1 WHERE id = $2', [stravaName, employeeId]);
     }
 
-    const empName = employeeId
-      ? (db.prepare('SELECT name FROM employees WHERE id = ?').get(employeeId) || {}).name
-      : null;
+    let empName = null;
+    if (employeeId) {
+      const { rows } = await pool.query('SELECT name FROM employees WHERE id = $1', [employeeId]);
+      if (rows.length > 0) empName = rows[0].name;
+    }
 
-    const safeEmpName = empName ? empName.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c])) : null;
-    const safeStravaName = stravaName.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+    const esc = s => s.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
 
     res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
       <style>body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;}
@@ -344,8 +343,8 @@ app.get('/auth/callback', async (req, res) => {
       <body><div class="card">
       <div class="icon">&#9989;</div>
       <h2>Ket noi thanh cong!</h2>
-      ${safeEmpName ? `<p>Nhan vien: <strong>${safeEmpName}</strong></p>` : ''}
-      <p>Strava: <strong>${safeStravaName}</strong></p>
+      ${empName ? `<p>Nhan vien: <strong>${esc(empName)}</strong></p>` : ''}
+      <p>Strava: <strong>${esc(stravaName)}</strong></p>
       <p>Du lieu chay cua ban se duoc tu dong dong bo.</p>
       <a href="/">Ve trang chu</a>
       </div></body></html>`);
@@ -364,17 +363,15 @@ app.get('/auth/callback', async (req, res) => {
 // ===== TOKEN REFRESH =====
 async function refreshAccessToken(user) {
   try {
-    const res = await axios.post('https://www.strava.com/oauth/token', {
+    const r = await axios.post('https://www.strava.com/oauth/token', {
       client_id: process.env.STRAVA_CLIENT_ID,
       client_secret: process.env.STRAVA_CLIENT_SECRET,
       grant_type: 'refresh_token',
       refresh_token: user.refresh_token,
     });
-
-    const { access_token, refresh_token } = res.data;
-    db.prepare('UPDATE users SET access_token = ?, refresh_token = ? WHERE id = ?')
-      .run(access_token, refresh_token, user.id);
-
+    const { access_token, refresh_token } = r.data;
+    await pool.query('UPDATE users SET access_token = $1, refresh_token = $2 WHERE id = $3',
+      [access_token, refresh_token, user.id]);
     return access_token;
   } catch (err) {
     console.error('Refresh token failed for', user.name);
@@ -384,7 +381,7 @@ async function refreshAccessToken(user) {
 
 // ===== FETCH ALL USERS DATA =====
 async function fetchAllUsers() {
-  const users = db.prepare('SELECT * FROM users WHERE access_token IS NOT NULL').all();
+  const { rows: users } = await pool.query('SELECT * FROM users WHERE access_token IS NOT NULL');
   if (!users.length) return;
 
   const now = new Date();
@@ -394,7 +391,6 @@ async function fetchAllUsers() {
     try {
       let token = user.access_token;
       let apiRes;
-
       try {
         apiRes = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
           headers: { Authorization: `Bearer ${token}` },
@@ -413,19 +409,21 @@ async function fetchAllUsers() {
         return d >= sevenDaysAgo && d <= now;
       });
 
-      const checkStmt = db.prepare('SELECT id FROM runs WHERE athlete_id = ? AND date = ? AND ABS(distance - ?) < 0.01');
-      const insertStmt = db.prepare('INSERT INTO runs (athlete_id, name, distance, date) VALUES (?, ?, ?, ?)');
-
       for (const run of runs) {
         const km = run.distance / 1000;
         const runDate = new Date(run.start_date).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
 
-        const existing = checkStmt.get(user.athlete_id, runDate, km);
-        if (!existing) {
-          insertStmt.run(user.athlete_id, user.name, km, runDate);
+        const { rows: existing } = await pool.query(
+          'SELECT id FROM runs WHERE athlete_id = $1 AND date = $2 AND ABS(distance - $3) < 0.01',
+          [user.athlete_id, runDate, km]
+        );
+        if (existing.length === 0) {
+          await pool.query(
+            'INSERT INTO runs (athlete_id, name, distance, date) VALUES ($1, $2, $3, $4)',
+            [user.athlete_id, user.name, km, runDate]
+          );
         }
       }
-
       console.log(`Synced ${runs.length} runs for ${user.name}`);
     } catch (userErr) {
       console.error('Error syncing user:', user.name, userErr.message);
@@ -441,6 +439,12 @@ cron.schedule('0 20 * * *', () => {
 
 // ===== START SERVER =====
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+initDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to init database:', err.message);
+  process.exit(1);
 });
