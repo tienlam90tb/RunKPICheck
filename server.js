@@ -20,7 +20,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS runs (
   athlete_id TEXT,
   name TEXT,
   distance REAL,
-  date TEXT
+  date TEXT,
+  proof TEXT
 )`);
 
 db.exec(`CREATE TABLE IF NOT EXISTS users (
@@ -31,6 +32,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS users (
   access_token TEXT,
   refresh_token TEXT
 )`);
+
+// Add proof column if missing
+try { db.exec('ALTER TABLE runs ADD COLUMN proof TEXT'); } catch (e) {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS employees (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +51,7 @@ app.get('/api/today', (req, res) => {
     `SELECT e.name, COALESCE(SUM(r.distance), 0) as total
      FROM employees e
      LEFT JOIN users u ON u.athlete_id = e.strava_username OR LOWER(u.name) = LOWER(e.strava_username)
-     LEFT JOIN runs r ON r.athlete_id = u.athlete_id AND r.date = ?
+     LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id) AND r.date = ?
      GROUP BY e.id
      ORDER BY total DESC`
   ).all(today);
@@ -59,7 +63,7 @@ app.get('/api/month', (req, res) => {
     `SELECT e.name, COALESCE(SUM(r.distance), 0) as total
      FROM employees e
      LEFT JOIN users u ON u.athlete_id = e.strava_username OR LOWER(u.name) = LOWER(e.strava_username)
-     LEFT JOIN runs r ON r.athlete_id = u.athlete_id
+     LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id)
      GROUP BY e.id
      ORDER BY total DESC`
   ).all();
@@ -72,7 +76,7 @@ app.get('/api/members', (req, res) => {
     `SELECT e.name, COALESCE(SUM(r.distance), 0) as total
      FROM employees e
      LEFT JOIN users u ON u.athlete_id = e.strava_username OR LOWER(u.name) = LOWER(e.strava_username)
-     LEFT JOIN runs r ON r.athlete_id = u.athlete_id AND r.date = ?
+     LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id) AND r.date = ?
      GROUP BY e.id
      ORDER BY total DESC`
   ).all(today);
@@ -165,6 +169,31 @@ app.post('/api/admin/sync', async (req, res) => {
   } catch (err) {
     res.json({ success: false, error: err.message });
   }
+});
+
+// ===== SUBMIT RUN (manual) =====
+app.post('/api/submit-run', (req, res) => {
+  const { employee_id, distance, proof } = req.body;
+  if (!employee_id || !distance || distance <= 0) {
+    return res.json({ success: false, error: 'Du lieu khong hop le' });
+  }
+
+  const emp = db.prepare('SELECT id, name FROM employees WHERE id = ?').get(employee_id);
+  if (!emp) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
+
+  const today = new Date().toDateString();
+  db.prepare('INSERT INTO runs (athlete_id, name, distance, date, proof) VALUES (?, ?, ?, ?, ?)')
+    .run('manual_' + emp.id, emp.name, distance, today, proof || null);
+
+  res.json({ success: true });
+});
+
+app.get('/api/my-runs/:empId', (req, res) => {
+  const today = new Date().toDateString();
+  const rows = db.prepare(
+    'SELECT distance, proof FROM runs WHERE athlete_id = ? AND date = ?'
+  ).all('manual_' + req.params.empId, today);
+  res.json(rows);
 });
 
 // ===== STRAVA AUTH =====

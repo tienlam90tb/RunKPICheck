@@ -399,30 +399,39 @@
     </div>
   </div>
 
-  <!-- Page: Connect -->
-  <div id="page-connect" class="page">
+  <!-- Page: Submit Run -->
+  <div id="page-submit" class="page">
     <div class="header">
-      <h1>Ket noi Strava</h1>
-      <p>Ket noi tai khoan Strava de tu dong dong bo</p>
+      <h1>Nhap KM</h1>
+      <p>Nhap so km da chay hom nay</p>
     </div>
 
     <div class="card">
-      <p style="margin-bottom:12px; color:#94a3b8; font-size:14px; line-height:1.6;">
-        Buoc 1: Cai app Strava tren dien thoai<br>
-        Buoc 2: Tao tai khoan & bat GPS khi chay<br>
-        Buoc 3: Nhan nut ben duoi de ket noi
-      </p>
-      <a href="/auth/login" class="connect-btn">Ket noi Strava</a>
+      <div id="submit-alert" style="display:none; padding:12px; border-radius:10px; margin-bottom:16px; font-size:14px;"></div>
+
+      <div style="margin-bottom:14px;">
+        <label style="color:#94a3b8; font-size:13px; display:block; margin-bottom:6px;">Chon ten cua ban</label>
+        <select id="select-name" style="width:100%; padding:12px 14px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; font-size:14px; font-family:'Inter',sans-serif;">
+          <option value="">-- Chon ten --</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="color:#94a3b8; font-size:13px; display:block; margin-bottom:6px;">So km da chay</label>
+        <input type="number" id="input-km" placeholder="Vi du: 5.2" step="0.01" min="0" style="width:100%; padding:12px 14px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; font-size:14px; font-family:'Inter',sans-serif;" />
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="color:#94a3b8; font-size:13px; display:block; margin-bottom:6px;">Minh chung (link anh Strava/screenshot)</label>
+        <input type="text" id="input-proof" placeholder="Dan link anh chup man hinh Strava" style="width:100%; padding:12px 14px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; font-size:14px; font-family:'Inter',sans-serif;" />
+      </div>
+
+      <button onclick="submitRun()" style="width:100%; padding:14px; border:none; border-radius:12px; background:linear-gradient(135deg,#4ade80,#16a34a); color:white; font-size:16px; font-weight:700; cursor:pointer;">Gui KM</button>
     </div>
 
     <div class="card">
-      <h2>Huong dan</h2>
-      <p style="color:#94a3b8; font-size:14px; line-height:1.8;">
-        - Tai Strava tu App Store (iOS) hoac Google Play (Android)<br>
-        - Dang ky tai khoan mien phi<br>
-        - Moi khi chay, mo Strava va nhan "Record"<br>
-        - He thong se tu dong lay du lieu moi ngay luc 20:00
-      </p>
+      <h2>Lich su hom nay</h2>
+      <div id="my-runs"></div>
     </div>
   </div>
 
@@ -436,9 +445,9 @@
       <span class="icon">👥</span>
       Thanh vien
     </button>
-    <button class="nav-item" onclick="showPage('connect')">
-      <span class="icon">🔗</span>
-      Ket noi
+    <button class="nav-item" onclick="showPage('submit')">
+      <span class="icon">🏃</span>
+      Nhap KM
     </button>
   </nav>
 
@@ -462,6 +471,7 @@
       event.currentTarget.classList.add('active');
 
       if (page === 'members') loadMembers();
+      if (page === 'submit') { loadEmployeeList(); loadMyRuns(); }
     }
 
     // Tabs
@@ -615,6 +625,103 @@
         list.innerHTML = '<p style="text-align:center;color:#f87171;padding:20px;">Loi tai du lieu</p>';
       }
     }
+
+    // Load employee list for dropdown
+    async function loadEmployeeList() {
+      try {
+        const res = await fetch(API + '/api/admin/employees');
+        const data = await res.json();
+        const select = document.getElementById('select-name');
+        select.innerHTML = '<option value="">-- Chon ten --</option>';
+        data.forEach(emp => {
+          select.innerHTML += `<option value="${emp.id}">${emp.name}</option>`;
+        });
+      } catch (err) {}
+    }
+
+    // Submit run
+    async function submitRun() {
+      const empId = document.getElementById('select-name').value;
+      const km = parseFloat(document.getElementById('input-km').value);
+      const proof = document.getElementById('input-proof').value.trim();
+      const alert = document.getElementById('submit-alert');
+
+      if (!empId) {
+        alert.style.display = 'block';
+        alert.style.background = '#7f1d1d';
+        alert.style.color = '#f87171';
+        alert.textContent = 'Vui long chon ten cua ban';
+        return;
+      }
+      if (!km || km <= 0) {
+        alert.style.display = 'block';
+        alert.style.background = '#7f1d1d';
+        alert.style.color = '#f87171';
+        alert.textContent = 'Vui long nhap so km hop le';
+        return;
+      }
+
+      try {
+        const res = await fetch(API + '/api/submit-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employee_id: empId, distance: km, proof })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert.style.display = 'block';
+          alert.style.background = '#166534';
+          alert.style.color = '#4ade80';
+          alert.textContent = 'Da gui ' + km + ' km thanh cong!';
+          document.getElementById('input-km').value = '';
+          document.getElementById('input-proof').value = '';
+          loadMyRuns();
+          loadData();
+        } else {
+          alert.style.display = 'block';
+          alert.style.background = '#7f1d1d';
+          alert.style.color = '#f87171';
+          alert.textContent = data.error || 'Loi khi gui';
+        }
+      } catch (err) {
+        alert.style.display = 'block';
+        alert.style.background = '#7f1d1d';
+        alert.style.color = '#f87171';
+        alert.textContent = 'Loi ket noi server';
+      }
+
+      setTimeout(() => { alert.style.display = 'none'; }, 3000);
+    }
+
+    // Load today's runs for selected employee
+    async function loadMyRuns() {
+      const div = document.getElementById('my-runs');
+      const empId = document.getElementById('select-name').value;
+      if (!empId) {
+        div.innerHTML = '<p style="color:#64748b;font-size:13px;">Chon ten de xem lich su</p>';
+        return;
+      }
+      try {
+        const res = await fetch(API + '/api/my-runs/' + empId);
+        const runs = await res.json();
+        if (runs.length === 0) {
+          div.innerHTML = '<p style="color:#64748b;font-size:13px;">Chua co du lieu hom nay</p>';
+          return;
+        }
+        div.innerHTML = '';
+        runs.forEach(r => {
+          div.innerHTML += `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #334155;font-size:14px;">
+            <span>${r.distance.toFixed(2)} km</span>
+            <span style="color:#94a3b8">${r.proof ? '📎 Co minh chung' : ''}</span>
+          </div>`;
+        });
+      } catch (err) {
+        div.innerHTML = '<p style="color:#f87171;font-size:13px;">Loi tai du lieu</p>';
+      }
+    }
+
+    // Reload runs when name changes
+    document.getElementById('select-name').addEventListener('change', loadMyRuns);
 
     // Register Service Worker
     if ('serviceWorker' in navigator) {
