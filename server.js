@@ -287,15 +287,6 @@ app.get('/api/employees-list', (req, res) => {
   res.json(rows);
 });
 
-// ===== DEBUG: check strava config =====
-app.get('/api/debug/strava', (req, res) => {
-  res.json({
-    client_id: process.env.STRAVA_CLIENT_ID,
-    redirect_uri: process.env.STRAVA_REDIRECT_URI,
-    has_secret: !!process.env.STRAVA_CLIENT_SECRET
-  });
-});
-
 // ===== STRAVA AUTH =====
 app.get('/auth/login', (req, res) => {
   const employeeId = req.query.employee_id || '';

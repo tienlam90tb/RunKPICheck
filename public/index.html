@@ -414,6 +414,7 @@
         <select id="select-name" style="width:100%; padding:12px 14px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; font-size:14px; font-family:'Inter',sans-serif;">
           <option value="">-- Chon ten --</option>
         </select>
+        <p style="color:#64748b; font-size:12px; margin-top:6px;">Chua co ten? <a href="/connect.html" style="color:#38bdf8;">Dang ky tai day</a></p>
       </div>
 
       <div style="margin-bottom:14px;">
@@ -450,8 +451,8 @@
       Nhap KM
     </button>
     <button class="nav-item" onclick="window.location.href='/connect.html'">
-      <span class="icon">🔗</span>
-      Strava
+      <span class="icon">📝</span>
+      Dang ky
     </button>
   </nav>
 
@@ -633,7 +634,7 @@
     // Load employee list for dropdown
     async function loadEmployeeList() {
       try {
-        const res = await fetch(API + '/api/admin/employees');
+        const res = await fetch(API + '/api/employees-list');
         const data = await res.json();
         const select = document.getElementById('select-name');
         select.innerHTML = '<option value="">-- Chon ten --</option>';
