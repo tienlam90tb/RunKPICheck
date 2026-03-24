@@ -735,9 +735,10 @@
         const km = (r.distance || 0).toFixed(2);
         let proofHtml = '<span style="color:#64748b;">Khong co</span>';
         if (r.proof) {
-          const isUrl = r.proof.startsWith('http');
-          if (isUrl) {
-            proofHtml = `<a href="${r.proof}" target="_blank" style="color:#38bdf8;text-decoration:underline;">Xem minh chung</a>`;
+          if (r.proof.startsWith('data:image')) {
+            proofHtml = `<img src="${r.proof}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="openProof(this.src)" />`;
+          } else if (r.proof.startsWith('http')) {
+            proofHtml = `<a href="${r.proof}" target="_blank" style="color:#38bdf8;text-decoration:underline;">Xem</a>`;
           } else {
             proofHtml = `<span style="color:#94a3b8;">${r.proof}</span>`;
           }
@@ -756,6 +757,12 @@
       document.getElementById('runs-body').innerHTML =
         '<tr><td colspan="4" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
     }
+  }
+
+  // Open proof image fullscreen
+  function openProof(src) {
+    const w = window.open('', '_blank');
+    w.document.write(`<html><head><title>Minh chung</title><style>body{margin:0;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;}img{max-width:100%;max-height:100vh;}</style></head><body><img src="${src}" /></body></html>`);
   }
 
   // Copy connect link

@@ -9,7 +9,7 @@ const crypto = require('crypto');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 // ===== ADMIN AUTH =====
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';

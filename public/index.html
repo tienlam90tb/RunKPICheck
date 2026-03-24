@@ -423,8 +423,15 @@
       </div>
 
       <div style="margin-bottom:14px;">
-        <label style="color:#94a3b8; font-size:13px; display:block; margin-bottom:6px;">Minh chung (link anh Strava/screenshot)</label>
-        <input type="text" id="input-proof" placeholder="Dan link anh chup man hinh Strava" style="width:100%; padding:12px 14px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; font-size:14px; font-family:'Inter',sans-serif;" />
+        <label style="color:#94a3b8; font-size:13px; display:block; margin-bottom:6px;">Anh minh chung (chup/chon tu thu vien)</label>
+        <div id="proof-preview" style="display:none; margin-bottom:10px; position:relative;">
+          <img id="proof-img" style="width:100%; max-height:200px; object-fit:cover; border-radius:10px; border:1px solid #334155;" />
+          <button onclick="clearProof()" style="position:absolute;top:6px;right:6px;background:#7f1d1d;color:#f87171;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;">&#10005;</button>
+        </div>
+        <label style="display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:2px dashed #334155;border-radius:12px;cursor:pointer;color:#94a3b8;font-size:14px;font-weight:400;">
+          &#128247; Chup anh / Chon tu thu vien
+          <input type="file" id="input-proof" accept="image/*" capture="environment" style="display:none;" onchange="previewProof(this)" />
+        </label>
       </div>
 
       <button onclick="submitRun()" style="width:100%; padding:14px; border:none; border-radius:12px; background:linear-gradient(135deg,#4ade80,#16a34a); color:white; font-size:16px; font-weight:700; cursor:pointer;">Gui KM</button>
@@ -644,11 +651,46 @@
       } catch (err) {}
     }
 
+    // Image proof handling
+    let proofBase64 = '';
+
+    function compressImage(file, maxWidth, quality) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = new Image();
+          img.onload = function() {
+            const canvas = document.createElement('canvas');
+            let w = img.width, h = img.height;
+            if (w > maxWidth) { h = h * maxWidth / w; w = maxWidth; }
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function previewProof(input) {
+      if (!input.files || !input.files[0]) return;
+      proofBase64 = await compressImage(input.files[0], 800, 0.6);
+      document.getElementById('proof-img').src = proofBase64;
+      document.getElementById('proof-preview').style.display = 'block';
+    }
+
+    function clearProof() {
+      proofBase64 = '';
+      document.getElementById('input-proof').value = '';
+      document.getElementById('proof-preview').style.display = 'none';
+    }
+
     // Submit run
     async function submitRun() {
       const empId = document.getElementById('select-name').value;
       const km = parseFloat(document.getElementById('input-km').value);
-      const proof = document.getElementById('input-proof').value.trim();
       const alert = document.getElementById('submit-alert');
 
       if (!empId) {
@@ -670,7 +712,7 @@
         const res = await fetch(API + '/api/submit-run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employee_id: empId, distance: km, proof })
+          body: JSON.stringify({ employee_id: empId, distance: km, proof: proofBase64 || null })
         });
         const data = await res.json();
         if (data.success) {
@@ -679,7 +721,7 @@
           alert.style.color = '#4ade80';
           alert.textContent = 'Da gui ' + km + ' km thanh cong!';
           document.getElementById('input-km').value = '';
-          document.getElementById('input-proof').value = '';
+          clearProof();
           loadMyRuns();
           loadData();
         } else {
@@ -715,9 +757,12 @@
         }
         div.innerHTML = '';
         runs.forEach(r => {
-          div.innerHTML += `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #334155;font-size:14px;">
+          const proofHtml = r.proof && r.proof.startsWith('data:image')
+            ? `<img src="${r.proof}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="window.open().document.write('<img src=\\''+this.src+'\\' style=\\'max-width:100%\\'>')" />`
+            : (r.proof ? '&#128206; Co minh chung' : '');
+          div.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #334155;font-size:14px;">
             <span>${r.distance.toFixed(2)} km</span>
-            <span style="color:#94a3b8">${r.proof ? '📎 Co minh chung' : ''}</span>
+            <span style="color:#94a3b8">${proofHtml}</span>
           </div>`;
         });
       } catch (err) {
