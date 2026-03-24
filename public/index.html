@@ -357,7 +357,7 @@
     <div class="card">
       <div class="kpi-target">
         <span>KPI muc tieu</span>
-        <strong id="kpi-label">5 km / ngay</strong>
+        <strong id="kpi-label">2 km / ngay</strong>
       </div>
 
       <div class="table-wrapper">
@@ -465,7 +465,7 @@
 
   <script>
     const API = window.location.origin;
-    const KPI_TARGET = 5;
+    const KPI_TARGET = 2;
     let currentTab = 'today';
     let chartInstance = null;
 
@@ -492,7 +492,7 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       event.currentTarget.classList.add('active');
       document.getElementById('kpi-label').textContent =
-        tab === 'today' ? '5 km / ngay' : '150 km / thang';
+        tab === 'today' ? '2 km / ngay' : '60 km / thang';
       loadData();
     }
 
@@ -506,7 +506,7 @@
         const res = await fetch(API + endpoint);
         const data = await res.json();
 
-        const target = currentTab === 'today' ? KPI_TARGET : 150;
+        const target = currentTab === 'today' ? KPI_TARGET : 60;
 
         data.sort((a, b) => b.total - a.total);
 
@@ -548,7 +548,7 @@
       const ctx = document.getElementById('chart').getContext('2d');
       if (chartInstance) chartInstance.destroy();
 
-      const target = currentTab === 'today' ? KPI_TARGET : 150;
+      const target = currentTab === 'today' ? KPI_TARGET : 60;
 
       chartInstance = new Chart(ctx, {
         type: 'bar',

@@ -406,7 +406,7 @@
 
 <script>
   const API = window.location.origin;
-  const KPI_TARGET = 5;
+  const KPI_TARGET = 2;
   let allEmployees = [];
   let adminToken = localStorage.getItem('admin_token') || '';
 
@@ -698,7 +698,7 @@
       data.sort((a, b) => b.total_km - a.total_km);
       data.forEach((r, i) => {
         const avg = r.run_days > 0 ? (r.total_km / r.run_days).toFixed(2) : '0.00';
-        const isPass = r.total_km >= 150;
+        const isPass = r.total_km >= 60;
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${i + 1}</td>
