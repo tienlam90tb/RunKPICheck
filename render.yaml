@@ -1,3 +1,8 @@
+databases:
+  - name: running-kpi-db
+    plan: free
+    region: singapore
+
 services:
   - type: web
     name: running-kpi
@@ -7,6 +12,10 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: running-kpi-db
+          property: connectionString
       - key: STRAVA_CLIENT_ID
         value: 215316
       - key: STRAVA_CLIENT_SECRET
