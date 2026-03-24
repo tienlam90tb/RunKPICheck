@@ -173,7 +173,7 @@
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
-        <div class="step-text">Chon ten cua ban trong danh sach</div>
+        <div class="step-text">Chon ten hoac nhap ten cua ban</div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
@@ -193,13 +193,20 @@
       &#9989; Ban da ket noi Strava roi!
     </div>
 
-    <label>Chon ten cua ban</label>
+    <div id="alert-msg" style="display:none;padding:12px;border-radius:10px;font-size:14px;margin-bottom:16px;"></div>
+
+    <label>Chon ten cua ban (neu co)</label>
     <select id="select-employee">
       <option value="">-- Chon ten --</option>
     </select>
     <div id="employee-status" class="employee-status"></div>
 
-    <button id="btn-connect" class="connect-btn" disabled onclick="connectStrava()">
+    <div style="text-align:center;color:#64748b;font-size:13px;margin:-8px 0 12px;">hoac</div>
+
+    <label>Nhap ten day du (neu chua co trong danh sach)</label>
+    <input type="text" id="input-name" placeholder="Vi du: Nguyen Van A" style="width:100%;padding:14px;border:1px solid #334155;border-radius:12px;background:#0f172a;color:#e2e8f0;font-size:15px;font-family:'Inter',sans-serif;margin-bottom:16px;" />
+
+    <button id="btn-connect" class="connect-btn" onclick="connectStrava()">
       &#9889; Ket noi Strava
     </button>
   </div>
@@ -209,6 +216,14 @@
 
 <script>
   const API = window.location.origin;
+
+  function showMsg(text, type) {
+    const el = document.getElementById('alert-msg');
+    el.style.display = 'block';
+    el.style.background = type === 'error' ? '#7f1d1d' : '#166534';
+    el.style.color = type === 'error' ? '#f87171' : '#4ade80';
+    el.textContent = text;
+  }
 
   async function loadEmployees() {
     try {
@@ -225,32 +240,63 @@
     }
   }
 
+  // When selecting existing employee, clear the name input
   document.getElementById('select-employee').addEventListener('change', function() {
-    const btn = document.getElementById('btn-connect');
     const status = document.getElementById('status-connected');
     const statusText = document.getElementById('employee-status');
     const selected = this.options[this.selectedIndex];
 
-    if (!this.value) {
-      btn.disabled = true;
+    if (this.value) {
+      document.getElementById('input-name').value = '';
+      const isConnected = selected.dataset.connected === '1';
+      status.style.display = isConnected ? 'block' : 'none';
+      statusText.textContent = isConnected ? 'Ban co the ket noi lai de cap nhat token.' : '';
+    } else {
       status.style.display = 'none';
       statusText.textContent = '';
+    }
+  });
+
+  // When typing name, clear the select
+  document.getElementById('input-name').addEventListener('input', function() {
+    if (this.value.trim()) {
+      document.getElementById('select-employee').value = '';
+      document.getElementById('status-connected').style.display = 'none';
+      document.getElementById('employee-status').textContent = '';
+    }
+  });
+
+  async function connectStrava() {
+    const selectVal = document.getElementById('select-employee').value;
+    const nameVal = document.getElementById('input-name').value.trim();
+
+    // Case 1: chose existing employee
+    if (selectVal) {
+      window.location.href = API + '/auth/login?employee_id=' + selectVal;
       return;
     }
 
-    const isConnected = selected.dataset.connected === '1';
-    status.style.display = isConnected ? 'block' : 'none';
-    statusText.textContent = isConnected
-      ? 'Ban co the ket noi lai de cap nhat token.'
-      : '';
-    btn.disabled = false;
-    btn.textContent = isConnected ? '\u26A1 Ket noi lai Strava' : '\u26A1 Ket noi Strava';
-  });
+    // Case 2: typed new name → create employee first
+    if (nameVal) {
+      try {
+        const res = await fetch(API + '/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: nameVal })
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = API + '/auth/login?employee_id=' + data.id;
+        } else {
+          showMsg(data.error || 'Loi dang ky', 'error');
+        }
+      } catch (err) {
+        showMsg('Loi ket noi server', 'error');
+      }
+      return;
+    }
 
-  function connectStrava() {
-    const empId = document.getElementById('select-employee').value;
-    if (!empId) return;
-    window.location.href = API + '/auth/login?employee_id=' + empId;
+    showMsg('Vui long chon ten hoac nhap ten cua ban', 'error');
   }
 
   loadEmployees();

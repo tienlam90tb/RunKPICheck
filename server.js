@@ -229,6 +229,26 @@ app.post('/api/admin/sync', async (req, res) => {
   }
 });
 
+// ===== EMPLOYEE SELF-REGISTER =====
+app.post('/api/register', (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.json({ success: false, error: 'Vui long nhap ten' });
+
+  const trimmed = name.trim();
+  // Check if name already exists
+  const existing = db.prepare('SELECT id FROM employees WHERE LOWER(name) = LOWER(?)').get(trimmed);
+  if (existing) {
+    return res.json({ success: true, id: existing.id, message: 'Ten da ton tai' });
+  }
+
+  try {
+    const result = db.prepare('INSERT INTO employees (name) VALUES (?)').run(trimmed);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // ===== SUBMIT RUN (manual) =====
 app.post('/api/submit-run', (req, res) => {
   const { employee_id, distance, proof } = req.body;
