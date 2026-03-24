@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const cron = require('node-cron');
 const cors = require('cors');
 const path = require('path');
@@ -12,88 +12,77 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ===== DATABASE =====
-const db = new sqlite3.Database('./data.db');
+const db = new Database('./data.db');
+db.pragma('journal_mode = WAL');
 
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    athlete_id TEXT,
-    name TEXT,
-    distance REAL,
-    date TEXT
-  )`);
+db.exec(`CREATE TABLE IF NOT EXISTS runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  athlete_id TEXT,
+  name TEXT,
+  distance REAL,
+  date TEXT
+)`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    athlete_id TEXT UNIQUE,
-    name TEXT,
-    email TEXT,
-    access_token TEXT,
-    refresh_token TEXT
-  )`);
+db.exec(`CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  athlete_id TEXT UNIQUE,
+  name TEXT,
+  email TEXT,
+  access_token TEXT,
+  refresh_token TEXT
+)`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS employees (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT,
-    strava_username TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  )`);
-});
+db.exec(`CREATE TABLE IF NOT EXISTS employees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT,
+  strava_username TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+)`);
 
 // ===== DASHBOARD API =====
 app.get('/api/today', (req, res) => {
   const today = new Date().toDateString();
-  db.all(
+  const rows = db.prepare(
     `SELECT e.name, COALESCE(SUM(r.distance), 0) as total
      FROM employees e
      LEFT JOIN users u ON u.athlete_id = e.strava_username OR LOWER(u.name) = LOWER(e.strava_username)
      LEFT JOIN runs r ON r.athlete_id = u.athlete_id AND r.date = ?
      GROUP BY e.id
-     ORDER BY total DESC`,
-    [today],
-    (err, rows) => {
-      res.json(rows || []);
-    }
-  );
+     ORDER BY total DESC`
+  ).all(today);
+  res.json(rows);
 });
 
 app.get('/api/month', (req, res) => {
-  db.all(
+  const rows = db.prepare(
     `SELECT e.name, COALESCE(SUM(r.distance), 0) as total
      FROM employees e
      LEFT JOIN users u ON u.athlete_id = e.strava_username OR LOWER(u.name) = LOWER(e.strava_username)
      LEFT JOIN runs r ON r.athlete_id = u.athlete_id
      GROUP BY e.id
-     ORDER BY total DESC`,
-    (err, rows) => {
-      res.json(rows || []);
-    }
-  );
+     ORDER BY total DESC`
+  ).all();
+  res.json(rows);
 });
 
 app.get('/api/members', (req, res) => {
   const today = new Date().toDateString();
-  db.all(
+  const rows = db.prepare(
     `SELECT e.name, COALESCE(SUM(r.distance), 0) as total
      FROM employees e
      LEFT JOIN users u ON u.athlete_id = e.strava_username OR LOWER(u.name) = LOWER(e.strava_username)
      LEFT JOIN runs r ON r.athlete_id = u.athlete_id AND r.date = ?
      GROUP BY e.id
-     ORDER BY total DESC`,
-    [today],
-    (err, rows) => {
-      res.json(rows || []);
-    }
-  );
+     ORDER BY total DESC`
+  ).all(today);
+  res.json(rows);
 });
 
 // ===== ADMIN API =====
-
-// Lay danh sach nhan vien + trang thai Strava + KM hom nay
 app.get('/api/admin/employees', (req, res) => {
   const today = new Date().toDateString();
-  db.all(
+  const rows = db.prepare(
     `SELECT e.id, e.name, e.email, e.strava_username,
        CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as strava_connected,
        COALESCE(r_today.today_km, 0) as today_km
@@ -107,59 +96,54 @@ app.get('/api/admin/employees', (req, res) => {
        GROUP BY athlete_id
      ) r_today ON u.athlete_id = r_today.athlete_id
      GROUP BY e.id
-     ORDER BY e.id`,
-    [today],
-    (err, rows) => {
-      res.json(rows || []);
-    }
-  );
+     ORDER BY e.id`
+  ).all(today);
+  res.json(rows);
 });
 
-// Them nhan vien
 app.post('/api/admin/employees', (req, res) => {
   const { name, email, strava_username } = req.body;
   if (!name || !name.trim()) return res.json({ success: false, error: 'Thieu ten nhan vien' });
 
-  db.run(
-    `INSERT INTO employees (name, email, strava_username) VALUES (?, ?, ?)`,
-    [name.trim(), email || null, strava_username || null],
-    function (err) {
-      if (err) return res.json({ success: false, error: err.message });
-      res.json({ success: true, id: this.lastID });
-    }
-  );
+  try {
+    const result = db.prepare(
+      `INSERT INTO employees (name, email, strava_username) VALUES (?, ?, ?)`
+    ).run(name.trim(), email || null, strava_username || null);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
 });
 
-// Cap nhat nhan vien
 app.patch('/api/admin/employees/:id', (req, res) => {
   const { name, email, strava_username } = req.body;
-  db.run(
-    `UPDATE employees SET name = ?, email = ?, strava_username = ? WHERE id = ?`,
-    [
+  try {
+    const result = db.prepare(
+      `UPDATE employees SET name = ?, email = ?, strava_username = ? WHERE id = ?`
+    ).run(
       name ? name.trim() : null,
       email ? email.trim() : null,
       strava_username ? strava_username.trim() : null,
       req.params.id
-    ],
-    function (err) {
-      if (err) return res.json({ success: false, error: err.message });
-      if (this.changes === 0) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
-      res.json({ success: true });
-    }
-  );
-});
-
-// Xoa nhan vien
-app.delete('/api/admin/employees/:id', (req, res) => {
-  db.run(`DELETE FROM employees WHERE id = ?`, [req.params.id], function (err) {
-    if (err) return res.json({ success: false, error: err.message });
+    );
+    if (result.changes === 0) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
     res.json({ success: true });
-  });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
 });
 
-// Bao cao thang
+app.delete('/api/admin/employees/:id', (req, res) => {
+  try {
+    db.prepare(`DELETE FROM employees WHERE id = ?`).run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/admin/report', (req, res) => {
-  db.all(
+  const rows = db.prepare(
     `SELECT e.name,
        COALESCE(SUM(r.distance), 0) as total_km,
        COUNT(DISTINCT r.date) as run_days
@@ -169,14 +153,11 @@ app.get('/api/admin/report', (req, res) => {
        OR LOWER(u.name) = LOWER(e.strava_username)
      LEFT JOIN runs r ON r.athlete_id = u.athlete_id
      GROUP BY e.id
-     ORDER BY total_km DESC`,
-    (err, rows) => {
-      res.json(rows || []);
-    }
-  );
+     ORDER BY total_km DESC`
+  ).all();
+  res.json(rows);
 });
 
-// Dong bo thu cong
 app.post('/api/admin/sync', async (req, res) => {
   try {
     await fetchAllUsers();
@@ -204,22 +185,18 @@ app.get('/auth/callback', async (req, res) => {
 
     const { access_token, refresh_token, athlete } = tokenRes.data;
     const stravaName = athlete.username || `${athlete.firstname || ''} ${athlete.lastname || ''}`.trim();
+    const athleteId = String(athlete.id);
 
-    // Upsert user
-    db.get('SELECT id FROM users WHERE athlete_id = ?', [String(athlete.id)], (err, row) => {
-      if (row) {
-        db.run(
-          `UPDATE users SET name = ?, access_token = ?, refresh_token = ? WHERE athlete_id = ?`,
-          [stravaName, access_token, refresh_token, String(athlete.id)]
-        );
-      } else {
-        db.run(
-          `INSERT INTO users (athlete_id, name, access_token, refresh_token) VALUES (?, ?, ?, ?)`,
-          [String(athlete.id), stravaName, access_token, refresh_token]
-        );
-      }
-      res.send(`<h2>Ket noi thanh cong!</h2><p>Athlete ID: <strong>${athlete.id}</strong></p><p>Username: <strong>${stravaName}</strong></p><p>Hay gui Athlete ID hoac username nay cho admin de lien ket voi tai khoan nhan vien.</p><p>Ban co the dong tab nay.</p>`);
-    });
+    const existing = db.prepare('SELECT id FROM users WHERE athlete_id = ?').get(athleteId);
+    if (existing) {
+      db.prepare('UPDATE users SET name = ?, access_token = ?, refresh_token = ? WHERE athlete_id = ?')
+        .run(stravaName, access_token, refresh_token, athleteId);
+    } else {
+      db.prepare('INSERT INTO users (athlete_id, name, access_token, refresh_token) VALUES (?, ?, ?, ?)')
+        .run(athleteId, stravaName, access_token, refresh_token);
+    }
+
+    res.send(`<h2>Ket noi thanh cong!</h2><p>Athlete ID: <strong>${athlete.id}</strong></p><p>Username: <strong>${stravaName}</strong></p><p>Hay gui Athlete ID hoac username nay cho admin de lien ket voi tai khoan nhan vien.</p><p>Ban co the dong tab nay.</p>`);
   } catch (err) {
     console.error(err.message);
     res.send('<h2>Loi ket noi Strava</h2><p>Vui long thu lai.</p>');
@@ -237,14 +214,8 @@ async function refreshAccessToken(user) {
     });
 
     const { access_token, refresh_token } = res.data;
-
-    await new Promise((resolve, reject) => {
-      db.run(
-        `UPDATE users SET access_token = ?, refresh_token = ? WHERE id = ?`,
-        [access_token, refresh_token, user.id],
-        (err) => (err ? reject(err) : resolve())
-      );
-    });
+    db.prepare('UPDATE users SET access_token = ?, refresh_token = ? WHERE id = ?')
+      .run(access_token, refresh_token, user.id);
 
     return access_token;
   } catch (err) {
@@ -255,68 +226,53 @@ async function refreshAccessToken(user) {
 
 // ===== FETCH ALL USERS DATA =====
 async function fetchAllUsers() {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM users', async (err, users) => {
-      if (err) return reject(err);
-      if (!users || users.length === 0) return resolve();
+  const users = db.prepare('SELECT * FROM users').all();
+  if (!users.length) return;
 
-      const now = new Date();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      for (const user of users) {
-        try {
-          let token = user.access_token;
-          let res;
+  for (const user of users) {
+    try {
+      let token = user.access_token;
+      let apiRes;
 
-          try {
-            res = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          } catch (apiErr) {
-            token = await refreshAccessToken(user);
-            if (!token) continue;
-            res = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
+      try {
+        apiRes = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (apiErr) {
+        token = await refreshAccessToken(user);
+        if (!token) continue;
+        apiRes = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
 
-          const runs = res.data.filter((a) => {
-            if (a.type !== 'Run') return false;
-            const d = new Date(a.start_date);
-            return d >= sevenDaysAgo && d <= now;
-          });
+      const runs = apiRes.data.filter((a) => {
+        if (a.type !== 'Run') return false;
+        const d = new Date(a.start_date);
+        return d >= sevenDaysAgo && d <= now;
+      });
 
-          for (const run of runs) {
-            const km = run.distance / 1000;
-            const runDate = new Date(run.start_date).toDateString();
+      const checkStmt = db.prepare('SELECT id FROM runs WHERE athlete_id = ? AND date = ? AND ABS(distance - ?) < 0.01');
+      const insertStmt = db.prepare('INSERT INTO runs (athlete_id, name, distance, date) VALUES (?, ?, ?, ?)');
 
-            // Tranh trung lap: kiem tra truoc khi insert
-            await new Promise((res2, rej2) => {
-              db.get(
-                `SELECT id FROM runs WHERE athlete_id = ? AND date = ? AND ABS(distance - ?) < 0.01`,
-                [user.athlete_id, runDate, km],
-                (err2, existing) => {
-                  if (err2) return rej2(err2);
-                  if (!existing) {
-                    db.run(
-                      `INSERT INTO runs (athlete_id, name, distance, date) VALUES (?, ?, ?, ?)`,
-                      [user.athlete_id, user.name, km, runDate]
-                    );
-                  }
-                  res2();
-                }
-              );
-            });
-          }
+      for (const run of runs) {
+        const km = run.distance / 1000;
+        const runDate = new Date(run.start_date).toDateString();
 
-          console.log(`Synced ${runs.length} runs for ${user.name}`);
-        } catch (userErr) {
-          console.error('Error syncing user:', user.name, userErr.message);
+        const existing = checkStmt.get(user.athlete_id, runDate, km);
+        if (!existing) {
+          insertStmt.run(user.athlete_id, user.name, km, runDate);
         }
       }
-      resolve();
-    });
-  });
+
+      console.log(`Synced ${runs.length} runs for ${user.name}`);
+    } catch (userErr) {
+      console.error('Error syncing user:', user.name, userErr.message);
+    }
+  }
 }
 
 // ===== CRON JOB - 20:00 moi ngay =====
