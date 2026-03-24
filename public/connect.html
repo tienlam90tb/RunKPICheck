@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ket noi Strava - Running KPI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 440px;
+      width: 100%;
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo .icon { font-size: 48px; }
+    .logo h1 { font-size: 22px; margin-top: 8px; }
+    .logo p { color: #94a3b8; font-size: 14px; margin-top: 4px; }
+
+    .card {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .steps {
+      margin-bottom: 20px;
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid #334155;
+    }
+
+    .step:last-child { border-bottom: none; }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+      flex-shrink: 0;
+      color: #38bdf8;
+    }
+
+    .step-text {
+      font-size: 14px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      color: #94a3b8;
+      font-size: 13px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    select {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 15px;
+      font-family: 'Inter', sans-serif;
+      margin-bottom: 16px;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+
+    .connect-btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #fc4c02, #e8430a);
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+
+    .connect-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .connect-btn:not(:disabled):active {
+      transform: scale(0.98);
+    }
+
+    .strava-logo {
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    .status-connected {
+      text-align: center;
+      padding: 16px;
+      background: #166534;
+      border-radius: 12px;
+      color: #4ade80;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .back-link {
+      display: block;
+      text-align: center;
+      color: #38bdf8;
+      text-decoration: none;
+      font-size: 14px;
+      margin-top: 16px;
+    }
+
+    .employee-status {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: -12px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo">
+    <div class="icon">&#127939;</div>
+    <h1>Ket noi Strava</h1>
+    <p>Lien ket tai khoan Strava de tu dong dong bo KM</p>
+  </div>
+
+  <div class="card">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Chon ten cua ban trong danh sach</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Nhan nut "Ket noi Strava" ben duoi</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Dang nhap Strava va cho phep truy cap</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Du lieu chay se tu dong cap nhat moi ngay!</div>
+      </div>
+    </div>
+
+    <div id="status-connected" class="status-connected">
+      &#9989; Ban da ket noi Strava roi!
+    </div>
+
+    <label>Chon ten cua ban</label>
+    <select id="select-employee">
+      <option value="">-- Chon ten --</option>
+    </select>
+    <div id="employee-status" class="employee-status"></div>
+
+    <button id="btn-connect" class="connect-btn" disabled onclick="connectStrava()">
+      &#9889; Ket noi Strava
+    </button>
+  </div>
+
+  <a href="/" class="back-link">&#8592; Ve trang chu</a>
+</div>
+
+<script>
+  const API = window.location.origin;
+
+  async function loadEmployees() {
+    try {
+      const res = await fetch(API + '/api/employees-list');
+      const data = await res.json();
+      const select = document.getElementById('select-employee');
+      select.innerHTML = '<option value="">-- Chon ten --</option>';
+      data.forEach(emp => {
+        const suffix = emp.strava_connected ? ' (da ket noi)' : '';
+        select.innerHTML += `<option value="${emp.id}" data-connected="${emp.strava_connected}">${emp.name}${suffix}</option>`;
+      });
+    } catch (err) {
+      console.error('Loi tai danh sach:', err);
+    }
+  }
+
+  document.getElementById('select-employee').addEventListener('change', function() {
+    const btn = document.getElementById('btn-connect');
+    const status = document.getElementById('status-connected');
+    const statusText = document.getElementById('employee-status');
+    const selected = this.options[this.selectedIndex];
+
+    if (!this.value) {
+      btn.disabled = true;
+      status.style.display = 'none';
+      statusText.textContent = '';
+      return;
+    }
+
+    const isConnected = selected.dataset.connected === '1';
+    status.style.display = isConnected ? 'block' : 'none';
+    statusText.textContent = isConnected
+      ? 'Ban co the ket noi lai de cap nhat token.'
+      : '';
+    btn.disabled = false;
+    btn.textContent = isConnected ? '\u26A1 Ket noi lai Strava' : '\u26A1 Ket noi Strava';
+  });
+
+  function connectStrava() {
+    const empId = document.getElementById('select-employee').value;
+    if (!empId) return;
+    window.location.href = API + '/auth/login?employee_id=' + empId;
+  }
+
+  loadEmployees();
+</script>
+</body>
+</html>

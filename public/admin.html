@@ -297,6 +297,7 @@
   <div class="actions">
     <button class="btn btn-success btn-sm" onclick="syncAllData()">Dong bo du lieu ngay</button>
     <button class="btn btn-warning btn-sm" onclick="exportCSV()">Xuat CSV</button>
+    <button class="btn btn-sm" style="background:#fc4c02;color:white;" onclick="copyConnectLink()">Copy link ket noi Strava</button>
   </div>
 
   <!-- Employee List -->
@@ -602,6 +603,16 @@
       document.getElementById('report-body').innerHTML =
         '<tr><td colspan="6" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
     }
+  }
+
+  // Copy connect link
+  function copyConnectLink() {
+    const link = window.location.origin + '/connect.html';
+    navigator.clipboard.writeText(link).then(() => {
+      showAlert('Da copy link: ' + link, 'success');
+    }).catch(() => {
+      prompt('Copy link nay:', link);
+    });
   }
 
   // Enter key to add
