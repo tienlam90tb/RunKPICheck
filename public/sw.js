@@ -1,13 +1,6 @@
-const CACHE_NAME = 'running-kpi-v1';
-const ASSETS = [
-  '/',
-  '/manifest.json',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap',
-  'https://cdn.jsdelivr.net/npm/chart.js'
-];
+const CACHE_NAME = 'running-kpi-v2';
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
 });
 
@@ -21,22 +14,17 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network first for API calls
-  if (e.request.url.includes('/api/')) {
-    e.respondWith(
-      fetch(e.request)
-        .then(res => {
+  // Network first for everything - always get latest version
+  e.respondWith(
+    fetch(e.request)
+      .then(res => {
+        // Cache a copy for offline fallback
+        if (res.ok && e.request.method === 'GET') {
           const clone = res.clone();
           caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-          return res;
-        })
-        .catch(() => caches.match(e.request))
-    );
-    return;
-  }
-
-  // Cache first for static assets
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
