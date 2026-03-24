@@ -250,8 +250,11 @@
 </head>
 <body>
 
-<div class="container">
-  <a href="/" class="back-link">← Quay lai Dashboard</a>
+<div id="admin-main" class="container" style="display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <a href="/" class="back-link">← Quay lai Dashboard</a>
+    <button class="btn btn-sm" style="background:#7f1d1d;color:#f87171;" onclick="adminLogout()">Dang xuat</button>
+  </div>
 
   <div class="header">
     <h1>Quan ly nhan vien</h1>
@@ -352,6 +355,23 @@
   </div>
 </div>
 
+<!-- Login Screen -->
+<div id="login-screen" style="display:flex;align-items:center;justify-content:center;min-height:100vh;position:fixed;top:0;left:0;right:0;bottom:0;background:#0f172a;z-index:9999;">
+  <div style="max-width:380px;width:100%;padding:20px;">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:48px;">&#128272;</div>
+      <h2 style="margin-top:12px;">Admin Login</h2>
+      <p style="color:#94a3b8;font-size:14px;margin-top:4px;">Nhap mat khau de truy cap quan ly</p>
+    </div>
+    <div class="card">
+      <div id="login-error" style="display:none;padding:12px;border-radius:10px;background:#7f1d1d;color:#f87171;font-size:14px;margin-bottom:16px;"></div>
+      <input type="password" id="login-password" placeholder="Mat khau admin" style="width:100%;padding:14px;border:1px solid #334155;border-radius:10px;background:#0f172a;color:#e2e8f0;font-size:15px;font-family:'Inter',sans-serif;margin-bottom:16px;" />
+      <button class="btn btn-primary" id="btn-login" style="width:100%;padding:14px;font-size:15px;">Dang nhap</button>
+    </div>
+    <a href="/" style="display:block;text-align:center;color:#38bdf8;text-decoration:none;font-size:14px;margin-top:16px;">&#8592; Ve trang chu</a>
+  </div>
+</div>
+
 <!-- Delete Confirm Modal -->
 <div class="modal-overlay" id="modal-delete">
   <div class="modal">
@@ -368,6 +388,74 @@
   const API = window.location.origin;
   const KPI_TARGET = 5;
   let allEmployees = [];
+  let adminToken = localStorage.getItem('admin_token') || '';
+
+  // ===== AUTH =====
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken };
+  }
+
+  async function checkAuth() {
+    if (!adminToken) { showLogin(); return; }
+    try {
+      const res = await fetch(API + '/api/admin/employees', { headers: authHeaders() });
+      if (res.status === 401) { showLogin(); return; }
+      showAdmin();
+    } catch (err) {
+      showLogin();
+    }
+  }
+
+  function showLogin() {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('admin-main').style.display = 'none';
+  }
+
+  function showAdmin() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-main').style.display = 'block';
+    loadEmployees();
+    loadReport();
+  }
+
+  document.getElementById('btn-login').addEventListener('click', doLogin);
+  document.getElementById('login-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  async function doLogin() {
+    const pw = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    if (!pw) { errEl.style.display = 'block'; errEl.textContent = 'Vui long nhap mat khau'; return; }
+
+    try {
+      const res = await fetch(API + '/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      });
+      const data = await res.json();
+      if (data.success) {
+        adminToken = data.token;
+        localStorage.setItem('admin_token', adminToken);
+        errEl.style.display = 'none';
+        showAdmin();
+      } else {
+        errEl.style.display = 'block';
+        errEl.textContent = data.error || 'Sai mat khau';
+      }
+    } catch (err) {
+      errEl.style.display = 'block';
+      errEl.textContent = 'Loi ket noi server';
+    }
+  }
+
+  async function adminLogout() {
+    try { await fetch(API + '/api/admin/logout', { method: 'POST', headers: authHeaders() }); } catch(e) {}
+    adminToken = '';
+    localStorage.removeItem('admin_token');
+    showLogin();
+  }
 
   // Show alert
   function showAlert(msg, type) {
@@ -391,7 +479,7 @@
     try {
       const res = await fetch(API + '/api/admin/employees', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ name, email, strava_username })
       });
       const data = await res.json();
@@ -413,7 +501,8 @@
   // Load employees
   async function loadEmployees() {
     try {
-      const res = await fetch(API + '/api/admin/employees');
+      const res = await fetch(API + '/api/admin/employees', { headers: authHeaders() });
+      if (res.status === 401) { showLogin(); return; }
       const data = await res.json();
       allEmployees = data;
 
@@ -510,7 +599,7 @@
     try {
       const res = await fetch(API + '/api/admin/employees/' + id, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ name: newName.trim(), email: newEmail.trim(), strava_username: newStrava.trim() })
       });
       const data = await res.json();
@@ -528,7 +617,7 @@
   document.getElementById('btn-confirm-delete').addEventListener('click', async () => {
     if (!deleteId) return;
     try {
-      const res = await fetch(API + '/api/admin/employees/' + deleteId, { method: 'DELETE' });
+      const res = await fetch(API + '/api/admin/employees/' + deleteId, { method: 'DELETE', headers: authHeaders() });
       const data = await res.json();
       if (data.success) {
         showAlert('Da xoa nhan vien', 'success');
@@ -544,7 +633,7 @@
   async function syncAllData() {
     showAlert('Dang dong bo du lieu...', 'success');
     try {
-      const res = await fetch(API + '/api/admin/sync', { method: 'POST' });
+      const res = await fetch(API + '/api/admin/sync', { method: 'POST', headers: authHeaders() });
       const data = await res.json();
       showAlert('Dong bo thanh cong!', 'success');
       loadEmployees();
@@ -574,7 +663,7 @@
   // Load monthly report
   async function loadReport() {
     try {
-      const res = await fetch(API + '/api/admin/report');
+      const res = await fetch(API + '/api/admin/report', { headers: authHeaders() });
       const data = await res.json();
 
       const tbody = document.getElementById('report-body');
@@ -621,8 +710,7 @@
   });
 
   // Init
-  loadEmployees();
-  loadReport();
+  checkAuth();
 </script>
 </body>
 </html>

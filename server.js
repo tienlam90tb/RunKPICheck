@@ -6,9 +6,48 @@ const cron = require('node-cron');
 const cors = require('cors');
 const path = require('path');
 
+const crypto = require('crypto');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// ===== ADMIN AUTH =====
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const adminTokens = new Set();
+
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    const token = crypto.randomBytes(32).toString('hex');
+    adminTokens.add(token);
+    res.json({ success: true, token });
+  } else {
+    res.status(401).json({ success: false, error: 'Sai mat khau' });
+  }
+});
+
+app.post('/api/admin/logout', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (token) adminTokens.delete(token);
+  res.json({ success: true });
+});
+
+function requireAdmin(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token || !adminTokens.has(token)) {
+    return res.status(401).json({ success: false, error: 'Chua dang nhap' });
+  }
+  next();
+}
+
+// Protect all admin API routes (except login/logout)
+app.use('/api/admin', (req, res, next) => {
+  if (req.path === '/login' || req.path === '/logout') return next();
+  requireAdmin(req, res, next);
+});
+
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ===== HELPERS =====
