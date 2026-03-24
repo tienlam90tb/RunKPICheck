@@ -201,6 +201,22 @@ app.delete('/api/admin/employees/:id', async (req, res) => {
   } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
+// Admin: view runs detail with proof
+app.get('/api/admin/runs', async (req, res) => {
+  try {
+    const date = req.query.date || vnToday();
+    const { rows } = await pool.query(
+      `SELECT r.id, r.athlete_id, r.name, r.distance::float, r.date, r.proof,
+         e.id as employee_id, e.name as employee_name
+       FROM runs r
+       LEFT JOIN employees e ON r.athlete_id = 'manual_' || e.id
+       WHERE r.date = $1
+       ORDER BY r.id DESC`, [date]
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
+});
+
 app.get('/api/admin/report', async (req, res) => {
   try {
     const { start, end } = vnMonthRange();

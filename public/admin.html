@@ -332,6 +332,26 @@
     </div>
   </div>
 
+  <!-- Runs Today with Proof -->
+  <div class="card">
+    <h2>Chi tiet chay hom nay</h2>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ten</th>
+            <th>KM</th>
+            <th>Minh chung</th>
+          </tr>
+        </thead>
+        <tbody id="runs-body">
+          <tr><td colspan="4" style="text-align:center;color:#64748b;padding:30px;">Dang tai...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- KPI Report -->
   <div class="card">
     <h2>Bao cao KPI thang nay</h2>
@@ -415,6 +435,7 @@
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-main').style.display = 'block';
     loadEmployees();
+    loadRuns();
     loadReport();
   }
 
@@ -637,6 +658,7 @@
       const data = await res.json();
       showAlert('Dong bo thanh cong!', 'success');
       loadEmployees();
+      loadRuns();
       loadReport();
     } catch (err) {
       showAlert('Loi dong bo', 'error');
@@ -691,6 +713,48 @@
     } catch (err) {
       document.getElementById('report-body').innerHTML =
         '<tr><td colspan="6" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
+    }
+  }
+
+  // Load today's runs with proof
+  async function loadRuns() {
+    try {
+      const res = await fetch(API + '/api/admin/runs', { headers: authHeaders() });
+      if (res.status === 401) return;
+      const data = await res.json();
+      const tbody = document.getElementById('runs-body');
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:30px;">Chua co ai chay hom nay</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      data.forEach((r, i) => {
+        const name = r.employee_name || r.name || '-';
+        const km = (r.distance || 0).toFixed(2);
+        let proofHtml = '<span style="color:#64748b;">Khong co</span>';
+        if (r.proof) {
+          const isUrl = r.proof.startsWith('http');
+          if (isUrl) {
+            proofHtml = `<a href="${r.proof}" target="_blank" style="color:#38bdf8;text-decoration:underline;">Xem minh chung</a>`;
+          } else {
+            proofHtml = `<span style="color:#94a3b8;">${r.proof}</span>`;
+          }
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${i + 1}</td>
+          <td><strong>${name}</strong></td>
+          <td>${km} km</td>
+          <td>${proofHtml}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    } catch (err) {
+      document.getElementById('runs-body').innerHTML =
+        '<tr><td colspan="4" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
     }
   }
 
