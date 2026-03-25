@@ -418,6 +418,11 @@
       </div>
 
       <div style="margin-bottom:14px;">
+        <label style="color:#94a3b8; font-size:13px; display:block; margin-bottom:6px;">Ma PIN (4 so)</label>
+        <input type="password" id="input-pin" placeholder="Nhap ma PIN 4 so" maxlength="4" inputmode="numeric" pattern="\d{4}" style="width:100%; padding:12px 14px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; font-size:14px; font-family:'Inter',sans-serif; letter-spacing:8px; text-align:center;" />
+      </div>
+
+      <div style="margin-bottom:14px;">
         <label style="color:#94a3b8; font-size:13px; display:block; margin-bottom:6px;">So km da chay</label>
         <input type="number" id="input-km" placeholder="Vi du: 5.2" step="0.01" min="0" style="width:100%; padding:12px 14px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; font-size:14px; font-family:'Inter',sans-serif;" />
       </div>
@@ -690,6 +695,7 @@
     // Submit run
     async function submitRun() {
       const empId = document.getElementById('select-name').value;
+      const pin = document.getElementById('input-pin').value;
       const km = parseFloat(document.getElementById('input-km').value);
       const alert = document.getElementById('submit-alert');
 
@@ -698,6 +704,13 @@
         alert.style.background = '#7f1d1d';
         alert.style.color = '#f87171';
         alert.textContent = 'Vui long chon ten cua ban';
+        return;
+      }
+      if (!pin || pin.length !== 4) {
+        alert.style.display = 'block';
+        alert.style.background = '#7f1d1d';
+        alert.style.color = '#f87171';
+        alert.textContent = 'Vui long nhap ma PIN 4 so';
         return;
       }
       if (!km || km <= 0) {
@@ -712,7 +725,7 @@
         const res = await fetch(API + '/api/submit-run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employee_id: empId, distance: km, proof: proofBase64 || null })
+          body: JSON.stringify({ employee_id: empId, distance: km, proof: proofBase64 || null, pin })
         });
         const data = await res.json();
         if (data.success) {

@@ -131,6 +131,9 @@
     <label>Ten day du cua ban</label>
     <input type="text" id="input-name" placeholder="Vi du: Nguyen Van A" />
 
+    <label>Tao ma PIN (4 so) - dung de xac nhan khi nhap KM</label>
+    <input type="password" id="input-pin" placeholder="Vi du: 1234" maxlength="4" inputmode="numeric" pattern="\d{4}" style="letter-spacing:8px; text-align:center;" />
+
     <button class="btn" onclick="register()">Dang ky</button>
   </div>
 
@@ -158,13 +161,15 @@
 
   async function register() {
     const name = document.getElementById('input-name').value.trim();
+    const pin = document.getElementById('input-pin').value;
     if (!name) { showAlert('Vui long nhap ten cua ban', 'error'); return; }
+    if (!pin || !/^\d{4}$/.test(pin)) { showAlert('PIN phai la 4 chu so', 'error'); return; }
 
     try {
       const res = await fetch(API + '/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name, pin })
       });
       const data = await res.json();
       if (data.success) {

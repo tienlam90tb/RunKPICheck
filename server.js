@@ -74,8 +74,12 @@ async function initDB() {
     name TEXT NOT NULL,
     email TEXT,
     strava_username TEXT,
+    pin TEXT,
     created_at TIMESTAMP DEFAULT NOW()
   )`);
+
+  // Add pin column if missing
+  await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin TEXT`);
 
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -235,6 +239,16 @@ app.get('/api/admin/report', async (req, res) => {
   } catch (err) { res.json([]); }
 });
 
+// Admin: reset PIN
+app.patch('/api/admin/employees/:id/pin', async (req, res) => {
+  const { pin } = req.body;
+  if (!pin || !/^\d{4}$/.test(pin)) return res.json({ success: false, error: 'PIN phai la 4 chu so' });
+  try {
+    await pool.query('UPDATE employees SET pin = $1 WHERE id = $2', [pin, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.json({ success: false, error: err.message }); }
+});
+
 app.post('/api/admin/sync', async (req, res) => {
   try { await fetchAllUsers(); res.json({ success: true }); }
   catch (err) { res.json({ success: false, error: err.message }); }
@@ -242,29 +256,32 @@ app.post('/api/admin/sync', async (req, res) => {
 
 // ===== EMPLOYEE SELF-REGISTER =====
 app.post('/api/register', async (req, res) => {
-  const { name } = req.body;
+  const { name, pin } = req.body;
   if (!name || !name.trim()) return res.json({ success: false, error: 'Vui long nhap ten' });
+  if (!pin || !/^\d{4}$/.test(pin)) return res.json({ success: false, error: 'PIN phai la 4 chu so' });
   const trimmed = name.trim();
   try {
     const { rows: existing } = await pool.query('SELECT id FROM employees WHERE LOWER(name) = LOWER($1)', [trimmed]);
     if (existing.length > 0) {
       return res.json({ success: true, id: existing[0].id, message: 'Ten da ton tai' });
     }
-    const { rows } = await pool.query('INSERT INTO employees (name) VALUES ($1) RETURNING id', [trimmed]);
+    const { rows } = await pool.query('INSERT INTO employees (name, pin) VALUES ($1, $2) RETURNING id', [trimmed, pin]);
     res.json({ success: true, id: rows[0].id });
   } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
 // ===== SUBMIT RUN (manual) =====
 app.post('/api/submit-run', async (req, res) => {
-  const { employee_id, distance, proof } = req.body;
+  const { employee_id, distance, proof, pin } = req.body;
   if (!employee_id || !distance || distance <= 0) {
     return res.json({ success: false, error: 'Du lieu khong hop le' });
   }
+  if (!pin) return res.json({ success: false, error: 'Vui long nhap ma PIN' });
   try {
-    const { rows } = await pool.query('SELECT id, name FROM employees WHERE id = $1', [employee_id]);
+    const { rows } = await pool.query('SELECT id, name, pin FROM employees WHERE id = $1', [employee_id]);
     if (rows.length === 0) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
     const emp = rows[0];
+    if (emp.pin && emp.pin !== pin) return res.json({ success: false, error: 'Sai ma PIN' });
     const today = vnToday();
     await pool.query(
       'INSERT INTO runs (athlete_id, name, distance, date, proof) VALUES ($1, $2, $3, $4, $5)',
