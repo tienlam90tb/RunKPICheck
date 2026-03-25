@@ -737,6 +737,9 @@
           clearProof();
           loadMyRuns();
           loadData();
+        } else if (data.error === 'NO_PIN') {
+          showSetPinDialog(empId);
+          return;
         } else {
           alert.style.display = 'block';
           alert.style.background = '#7f1d1d';
@@ -781,6 +784,39 @@
       } catch (err) {
         div.innerHTML = '<p style="color:#f87171;font-size:13px;">Loi tai du lieu</p>';
       }
+    }
+
+    // Set PIN dialog for existing employees without PIN
+    function showSetPinDialog(empId) {
+      const newPin = prompt('Ban chua co ma PIN.\nHay tao PIN 4 so de bao mat tai khoan:');
+      if (!newPin || !/^\d{4}$/.test(newPin)) {
+        const alert = document.getElementById('submit-alert');
+        alert.style.display = 'block';
+        alert.style.background = '#7f1d1d';
+        alert.style.color = '#f87171';
+        alert.textContent = 'PIN phai la 4 chu so. Vui long thu lai.';
+        setTimeout(() => { alert.style.display = 'none'; }, 3000);
+        return;
+      }
+      fetch(API + '/api/set-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: empId, pin: newPin })
+      }).then(r => r.json()).then(data => {
+        const alert = document.getElementById('submit-alert');
+        if (data.success) {
+          alert.style.display = 'block';
+          alert.style.background = '#166534';
+          alert.style.color = '#4ade80';
+          alert.textContent = 'Tao PIN thanh cong! Hay nhap PIN va gui lai KM.';
+        } else {
+          alert.style.display = 'block';
+          alert.style.background = '#7f1d1d';
+          alert.style.color = '#f87171';
+          alert.textContent = data.error || 'Loi tao PIN';
+        }
+        setTimeout(() => { alert.style.display = 'none'; }, 3000);
+      });
     }
 
     // Reload runs when name changes

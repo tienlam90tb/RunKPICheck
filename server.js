@@ -270,6 +270,20 @@ app.post('/api/register', async (req, res) => {
   } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
+// ===== SET PIN (for existing employees without PIN) =====
+app.post('/api/set-pin', async (req, res) => {
+  const { employee_id, pin } = req.body;
+  if (!employee_id) return res.json({ success: false, error: 'Thieu employee_id' });
+  if (!pin || !/^\d{4}$/.test(pin)) return res.json({ success: false, error: 'PIN phai la 4 chu so' });
+  try {
+    const { rows } = await pool.query('SELECT id, pin FROM employees WHERE id = $1', [employee_id]);
+    if (rows.length === 0) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
+    if (rows[0].pin) return res.json({ success: false, error: 'Ban da co PIN roi. Lien he admin neu quen.' });
+    await pool.query('UPDATE employees SET pin = $1 WHERE id = $2', [pin, employee_id]);
+    res.json({ success: true });
+  } catch (err) { res.json({ success: false, error: err.message }); }
+});
+
 // ===== SUBMIT RUN (manual) =====
 app.post('/api/submit-run', async (req, res) => {
   const { employee_id, distance, proof, pin } = req.body;
@@ -281,7 +295,8 @@ app.post('/api/submit-run', async (req, res) => {
     const { rows } = await pool.query('SELECT id, name, pin FROM employees WHERE id = $1', [employee_id]);
     if (rows.length === 0) return res.json({ success: false, error: 'Khong tim thay nhan vien' });
     const emp = rows[0];
-    if (emp.pin && emp.pin !== pin) return res.json({ success: false, error: 'Sai ma PIN' });
+    if (!emp.pin) return res.json({ success: false, error: 'NO_PIN', message: 'Ban chua co PIN. Vui long tao PIN truoc.' });
+    if (emp.pin !== pin) return res.json({ success: false, error: 'Sai ma PIN' });
     const today = vnToday();
     await pool.query(
       'INSERT INTO runs (athlete_id, name, distance, date, proof) VALUES ($1, $2, $3, $4, $5)',
