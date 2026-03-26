@@ -221,6 +221,24 @@ app.get('/api/admin/runs', async (req, res) => {
   } catch (err) { res.json([]); }
 });
 
+// Admin: delete a run
+app.delete('/api/admin/runs/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM runs WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.json({ success: false, error: err.message }); }
+});
+
+// Admin: edit a run distance
+app.patch('/api/admin/runs/:id', async (req, res) => {
+  const { distance } = req.body;
+  if (!distance || distance <= 0) return res.json({ success: false, error: 'KM khong hop le' });
+  try {
+    await pool.query('UPDATE runs SET distance = $1 WHERE id = $2', [distance, req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.json({ success: false, error: err.message }); }
+});
+
 app.get('/api/admin/report', async (req, res) => {
   try {
     const { start, end } = vnMonthRange();
