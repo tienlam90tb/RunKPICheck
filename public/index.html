@@ -461,9 +461,8 @@
   </div>
   <style>
     @keyframes popIn { 0%{transform:scale(0);opacity:0} 50%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
-    @keyframes confetti { 0%{opacity:1;transform:translateY(0) rotate(0)} 100%{opacity:0;transform:translateY(400px) rotate(720deg)} }
-    .confetti-piece { position:fixed;top:-10px;width:10px;height:10px;border-radius:2px;z-index:10000;animation:confetti 2s ease-out forwards; }
   </style>
+  <canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:10000;pointer-events:none;display:none;"></canvas>
 
   <!-- Bottom Navigation -->
   <nav class="bottom-nav">
@@ -801,27 +800,118 @@
       }
     }
 
-    // Success overlay with confetti
+    // Success overlay with full-screen confetti explosion
+    const confettiCanvas = document.getElementById('confetti-canvas');
+    const ctx = confettiCanvas.getContext('2d');
+    let confettiPieces = [];
+    let confettiAnimId = null;
+
+    function launchConfetti() {
+      confettiCanvas.width = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+      confettiCanvas.style.display = 'block';
+      confettiPieces = [];
+
+      const colors = ['#4ade80','#38bdf8','#f59e0b','#f87171','#a78bfa','#fb923c','#e879f9','#22d3ee','#facc15','#fb7185'];
+      const shapes = ['rect','circle','strip'];
+      const cx = confettiCanvas.width / 2;
+      const cy = confettiCanvas.height / 2;
+
+      // Burst from center in all directions
+      for (let i = 0; i < 150; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 4 + Math.random() * 12;
+        confettiPieces.push({
+          x: cx, y: cy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 4,
+          w: 6 + Math.random() * 10,
+          h: 4 + Math.random() * 8,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          shape: shapes[Math.floor(Math.random() * shapes.length)],
+          rotation: Math.random() * 360,
+          rotSpeed: (Math.random() - 0.5) * 15,
+          gravity: 0.12 + Math.random() * 0.08,
+          opacity: 1,
+          decay: 0.003 + Math.random() * 0.005
+        });
+      }
+
+      // Side bursts (left and right)
+      for (let side = 0; side < 2; side++) {
+        const sx = side === 0 ? 0 : confettiCanvas.width;
+        for (let i = 0; i < 60; i++) {
+          const angle = side === 0 ? (-Math.PI/4 + Math.random() * Math.PI/2) : (Math.PI/2 + Math.PI/4 + Math.random() * Math.PI/2);
+          const speed = 5 + Math.random() * 10;
+          confettiPieces.push({
+            x: sx, y: confettiCanvas.height * (0.2 + Math.random() * 0.6),
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 3,
+            w: 6 + Math.random() * 10,
+            h: 4 + Math.random() * 8,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            shape: shapes[Math.floor(Math.random() * shapes.length)],
+            rotation: Math.random() * 360,
+            rotSpeed: (Math.random() - 0.5) * 15,
+            gravity: 0.1 + Math.random() * 0.08,
+            opacity: 1,
+            decay: 0.004 + Math.random() * 0.004
+          });
+        }
+      }
+
+      if (confettiAnimId) cancelAnimationFrame(confettiAnimId);
+      animateConfetti();
+    }
+
+    function animateConfetti() {
+      ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      let alive = false;
+
+      confettiPieces.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.vx *= 0.99;
+        p.rotation += p.rotSpeed;
+        p.opacity -= p.decay;
+        if (p.opacity <= 0) return;
+        alive = true;
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation * Math.PI / 180);
+        ctx.globalAlpha = p.opacity;
+        ctx.fillStyle = p.color;
+
+        if (p.shape === 'circle') {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.shape === 'strip') {
+          ctx.fillRect(-p.w / 2, -1.5, p.w, 3);
+        } else {
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        }
+        ctx.restore();
+      });
+
+      if (alive) {
+        confettiAnimId = requestAnimationFrame(animateConfetti);
+      } else {
+        ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        confettiCanvas.style.display = 'none';
+        confettiAnimId = null;
+      }
+    }
+
     function showSuccessOverlay(km) {
       const overlay = document.getElementById('success-overlay');
       document.getElementById('success-km').textContent = km + ' km da duoc ghi nhan!';
       overlay.style.display = 'flex';
       document.getElementById('success-content').style.animation = 'none';
       setTimeout(() => { document.getElementById('success-content').style.animation = 'popIn 0.5s ease forwards'; }, 10);
-      // Confetti
-      const colors = ['#4ade80','#38bdf8','#f59e0b','#f87171','#a78bfa','#fb923c'];
-      for (let i = 0; i < 40; i++) {
-        const c = document.createElement('div');
-        c.className = 'confetti-piece';
-        c.style.left = Math.random() * 100 + 'vw';
-        c.style.background = colors[Math.floor(Math.random() * colors.length)];
-        c.style.animationDelay = Math.random() * 0.5 + 's';
-        c.style.animationDuration = (1.5 + Math.random()) + 's';
-        c.style.width = (6 + Math.random() * 8) + 'px';
-        c.style.height = (6 + Math.random() * 8) + 'px';
-        document.body.appendChild(c);
-        setTimeout(() => c.remove(), 3000);
-      }
+      launchConfetti();
     }
 
     function closeSuccessOverlay() {
