@@ -573,6 +573,7 @@
         <td><span class="badge ${isPass ? 'badge-ok' : 'badge-fail'}">${isPass ? 'Dat' : 'Chua dat'}</span></td>
         <td><div class="btn-actions">
           <button class="btn btn-sm" style="background:#64748b;color:#fff;" onclick="editEmployee(${emp.id}, '${safeName}', '${safeEmail}', '${safeStrava}')">Sua</button>
+          <button class="btn btn-sm" style="background:#f59e0b;color:#000;" onclick="resetPin(${emp.id}, '${safeName}')">PIN</button>
           <button class="btn btn-danger btn-sm" onclick="confirmDelete(${emp.id}, '${safeName}')">Xoa</button>
         </div></td>
       `;
@@ -601,6 +602,25 @@
   function closeModal() {
     document.getElementById('modal-delete').classList.remove('active');
     deleteId = null;
+  }
+
+  async function resetPin(id, name) {
+    const newPin = prompt(`Dat lai PIN cho "${name}".\nNhap PIN moi (4 so):`);
+    if (!newPin) return;
+    if (!/^\d{4}$/.test(newPin)) { showAlert('PIN phai la 4 chu so', 'danger'); return; }
+    try {
+      const res = await fetch(API + `/api/admin/employees/${id}/pin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ pin: newPin })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert(`Da reset PIN cho ${name} thanh cong!`, 'success');
+      } else {
+        showAlert(data.error || 'Loi reset PIN', 'danger');
+      }
+    } catch (err) { showAlert('Loi ket noi', 'danger'); }
   }
 
   async function editEmployee(id, name, email, strava_username) {
