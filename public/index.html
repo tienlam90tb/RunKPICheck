@@ -448,6 +448,23 @@
     </div>
   </div>
 
+  <!-- Success Overlay -->
+  <div id="success-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;
+    display:none;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:20px;">
+    <div id="success-content" style="animation:popIn 0.5s ease;transform:scale(0);">
+      <div style="font-size:80px;margin-bottom:16px;">&#10004;&#65039;</div>
+      <h2 style="color:#4ade80;font-size:28px;margin-bottom:8px;">Gui thanh cong!</h2>
+      <p id="success-km" style="color:#e2e8f0;font-size:22px;font-weight:700;margin-bottom:4px;"></p>
+      <p style="color:#94a3b8;font-size:14px;margin-bottom:24px;">Du lieu da duoc ghi nhan. Ban khong can gui them.</p>
+      <button onclick="closeSuccessOverlay()" style="padding:14px 40px;border:none;border-radius:12px;background:#4ade80;color:#0f172a;font-size:16px;font-weight:700;cursor:pointer;">OK</button>
+    </div>
+  </div>
+  <style>
+    @keyframes popIn { 0%{transform:scale(0);opacity:0} 50%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+    @keyframes confetti { 0%{opacity:1;transform:translateY(0) rotate(0)} 100%{opacity:0;transform:translateY(400px) rotate(720deg)} }
+    .confetti-piece { position:fixed;top:-10px;width:10px;height:10px;border-radius:2px;z-index:10000;animation:confetti 2s ease-out forwards; }
+  </style>
+
   <!-- Bottom Navigation -->
   <nav class="bottom-nav">
     <button class="nav-item active" onclick="showPage('dashboard')">
@@ -729,12 +746,10 @@
         });
         const data = await res.json();
         if (data.success) {
-          alert.style.display = 'block';
-          alert.style.background = '#166534';
-          alert.style.color = '#4ade80';
-          alert.textContent = 'Da gui ' + km + ' km thanh cong!';
           document.getElementById('input-km').value = '';
+          document.getElementById('input-pin').value = '';
           clearProof();
+          showSuccessOverlay(km);
           loadMyRuns();
           loadData();
         } else if (data.error === 'NO_PIN') {
@@ -784,6 +799,33 @@
       } catch (err) {
         div.innerHTML = '<p style="color:#f87171;font-size:13px;">Loi tai du lieu</p>';
       }
+    }
+
+    // Success overlay with confetti
+    function showSuccessOverlay(km) {
+      const overlay = document.getElementById('success-overlay');
+      document.getElementById('success-km').textContent = km + ' km da duoc ghi nhan!';
+      overlay.style.display = 'flex';
+      document.getElementById('success-content').style.animation = 'none';
+      setTimeout(() => { document.getElementById('success-content').style.animation = 'popIn 0.5s ease forwards'; }, 10);
+      // Confetti
+      const colors = ['#4ade80','#38bdf8','#f59e0b','#f87171','#a78bfa','#fb923c'];
+      for (let i = 0; i < 40; i++) {
+        const c = document.createElement('div');
+        c.className = 'confetti-piece';
+        c.style.left = Math.random() * 100 + 'vw';
+        c.style.background = colors[Math.floor(Math.random() * colors.length)];
+        c.style.animationDelay = Math.random() * 0.5 + 's';
+        c.style.animationDuration = (1.5 + Math.random()) + 's';
+        c.style.width = (6 + Math.random() * 8) + 'px';
+        c.style.height = (6 + Math.random() * 8) + 'px';
+        document.body.appendChild(c);
+        setTimeout(() => c.remove(), 3000);
+      }
+    }
+
+    function closeSuccessOverlay() {
+      document.getElementById('success-overlay').style.display = 'none';
     }
 
     // Set PIN dialog for existing employees without PIN
