@@ -332,9 +332,12 @@
     </div>
   </div>
 
-  <!-- Runs Today with Proof -->
+  <!-- Runs with Proof -->
   <div class="card">
-    <h2>Chi tiet chay hom nay</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <h2 style="margin:0;">Chi tiet chay</h2>
+      <input type="date" id="runs-date" style="padding:8px 12px;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#e2e8f0;font-size:14px;font-family:'Inter',sans-serif;" onchange="loadRuns(this.value)" />
+    </div>
     <div class="table-wrapper">
       <table>
         <thead>
@@ -435,8 +438,11 @@
   function showAdmin() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-main').style.display = 'block';
+    // Set date picker to today
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    document.getElementById('runs-date').value = today;
     loadEmployees();
-    loadRuns();
+    loadRuns(today);
     loadReport();
   }
 
@@ -738,9 +744,11 @@
   }
 
   // Load today's runs with proof
-  async function loadRuns() {
+  async function loadRuns(date) {
     try {
-      const res = await fetch(API + '/api/admin/runs', { headers: authHeaders() });
+      const dateParam = date || document.getElementById('runs-date').value || '';
+      const url = dateParam ? API + '/api/admin/runs?date=' + dateParam : API + '/api/admin/runs';
+      const res = await fetch(url, { headers: authHeaders() });
       if (res.status === 401) return;
       const data = await res.json();
       const tbody = document.getElementById('runs-body');
