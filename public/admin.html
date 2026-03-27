@@ -369,10 +369,11 @@
             <th>So ngay chay</th>
             <th>Trung binh/ngay</th>
             <th>Trang thai</th>
+            <th>Hanh dong</th>
           </tr>
         </thead>
         <tbody id="report-body">
-          <tr><td colspan="6" style="text-align:center;color:#64748b;padding:30px;">Dang tai...</td></tr>
+          <tr><td colspan="7" style="text-align:center;color:#64748b;padding:30px;">Dang tai...</td></tr>
         </tbody>
       </table>
     </div>
@@ -393,6 +394,30 @@
       <button class="btn btn-primary" id="btn-login" style="width:100%;padding:14px;font-size:15px;">Dang nhap</button>
     </div>
     <a href="/" style="display:block;text-align:center;color:#38bdf8;text-decoration:none;font-size:14px;margin-top:16px;">&#8592; Ve trang chu</a>
+  </div>
+</div>
+
+<!-- Employee Runs Detail Modal -->
+<div class="modal-overlay" id="modal-emp-runs" style="align-items:flex-start;padding-top:60px;">
+  <div class="modal" style="max-width:600px;width:95%;max-height:80vh;overflow-y:auto;">
+    <h3 id="emp-runs-title" style="margin-bottom:12px;">Chi tiet chay</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ngay</th>
+            <th>KM</th>
+            <th>Minh chung</th>
+            <th>Hanh dong</th>
+          </tr>
+        </thead>
+        <tbody id="emp-runs-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-cancel" onclick="closeEmpRunsModal()">Dong</button>
+    </div>
   </div>
 </div>
 
@@ -726,6 +751,7 @@
       data.forEach((r, i) => {
         const avg = r.run_days > 0 ? (r.total_km / r.run_days).toFixed(2) : '0.00';
         const isPass = r.total_km >= 60;
+        const safeName = r.name.replace(/'/g, "\\'");
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${i + 1}</td>
@@ -734,12 +760,13 @@
           <td>${r.run_days} ngay</td>
           <td>${avg} km</td>
           <td><span class="badge ${isPass ? 'badge-ok' : 'badge-fail'}">${isPass ? 'Dat' : 'Chua dat'}</span></td>
+          <td><button class="btn btn-sm" style="background:#38bdf8;color:#0f172a;font-weight:600;" onclick="viewEmpRuns(${r.employee_id}, '${safeName}')">Chi tiet</button></td>
         `;
         tbody.appendChild(row);
       });
     } catch (err) {
       document.getElementById('report-body').innerHTML =
-        '<tr><td colspan="6" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
+        '<tr><td colspan="7" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
     }
   }
 
@@ -822,6 +849,88 @@
       if (data.success) {
         showAlert('Da xoa thanh cong!', 'success');
         loadRuns(); loadEmployeeList(); loadReport();
+      } else { showAlert(data.error || 'Loi xoa', 'danger'); }
+    } catch (err) { showAlert('Loi ket noi', 'danger'); }
+  }
+
+  // View employee runs this month
+  async function viewEmpRuns(empId, name) {
+    document.getElementById('emp-runs-title').textContent = 'Chi tiet chay thang - ' + name;
+    document.getElementById('emp-runs-body').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;">Dang tai...</td></tr>';
+    document.getElementById('modal-emp-runs').classList.add('active');
+    try {
+      const res = await fetch(API + '/api/admin/employee-runs/' + empId, { headers: authHeaders() });
+      const data = await res.json();
+      const tbody = document.getElementById('emp-runs-body');
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;">Khong co du lieu</td></tr>';
+        return;
+      }
+      tbody.innerHTML = '';
+      data.forEach((r, i) => {
+        let proofHtml = '<span style="color:#64748b;">-</span>';
+        if (r.proof) {
+          if (r.proof.startsWith('data:image')) {
+            proofHtml = `<img src="${r.proof}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="openProof(this.src)" />`;
+          } else if (r.proof.startsWith('http')) {
+            proofHtml = `<a href="${r.proof}" target="_blank" style="color:#38bdf8;">Xem</a>`;
+          }
+        }
+        const row = document.createElement('tr');
+        row.setAttribute('data-run-id', r.id);
+        row.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${r.date}</td>
+          <td>${(r.distance || 0).toFixed(2)} km</td>
+          <td>${proofHtml}</td>
+          <td><div class="btn-actions">
+            <button class="btn btn-sm" style="background:#64748b;color:#fff;" onclick="editRunFromReport(${r.id}, ${r.distance}, ${empId}, '${name.replace(/'/g, "\\'")}')">Sua</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRunFromReport(${r.id}, ${empId}, '${name.replace(/'/g, "\\'")}')">Xoa</button>
+          </div></td>
+        `;
+        tbody.appendChild(row);
+      });
+    } catch (err) {
+      document.getElementById('emp-runs-body').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
+    }
+  }
+
+  function closeEmpRunsModal() {
+    document.getElementById('modal-emp-runs').classList.remove('active');
+  }
+
+  async function editRunFromReport(runId, currentKm, empId, name) {
+    const newKm = prompt('Nhap so KM moi:', currentKm);
+    if (newKm === null) return;
+    const km = parseFloat(newKm);
+    if (isNaN(km) || km <= 0) { showAlert('KM khong hop le', 'danger'); return; }
+    try {
+      const res = await fetch(API + `/api/admin/runs/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ distance: km })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert('Da sua KM thanh cong!', 'success');
+        viewEmpRuns(empId, name);
+        loadReport();
+      } else { showAlert(data.error || 'Loi sua', 'danger'); }
+    } catch (err) { showAlert('Loi ket noi', 'danger'); }
+  }
+
+  async function deleteRunFromReport(runId, empId, name) {
+    if (!confirm('Xoa ban ghi nay? Hanh dong khong the hoan tac.')) return;
+    try {
+      const res = await fetch(API + `/api/admin/runs/${runId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert('Da xoa thanh cong!', 'success');
+        viewEmpRuns(empId, name);
+        loadReport();
       } else { showAlert(data.error || 'Loi xoa', 'danger'); }
     } catch (err) { showAlert('Loi ket noi', 'danger'); }
   }

@@ -239,11 +239,27 @@ app.patch('/api/admin/runs/:id', async (req, res) => {
   } catch (err) { res.json({ success: false, error: err.message }); }
 });
 
+// Admin: get all runs of an employee this month
+app.get('/api/admin/employee-runs/:empId', async (req, res) => {
+  try {
+    const { start, end } = vnMonthRange();
+    const empId = req.params.empId;
+    const { rows } = await pool.query(
+      `SELECT r.id, r.distance::float, r.date, r.name, r.proof
+       FROM runs r
+       WHERE r.athlete_id = 'manual_' || $1
+         AND r.date >= $2 AND r.date <= $3
+       ORDER BY r.date DESC, r.id DESC`, [empId, start, end]
+    );
+    res.json(rows);
+  } catch (err) { res.json([]); }
+});
+
 app.get('/api/admin/report', async (req, res) => {
   try {
     const { start, end } = vnMonthRange();
     const { rows } = await pool.query(
-      `SELECT e.name,
+      `SELECT e.id as employee_id, e.name,
          COALESCE(SUM(r.distance), 0)::float as total_km,
          COUNT(DISTINCT r.date)::int as run_days
        FROM employees e
