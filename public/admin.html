@@ -643,7 +643,7 @@
     try {
       const res = await fetch(API + `/api/admin/employees/${id}/pin`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
         body: JSON.stringify({ pin: newPin })
       });
       const data = await res.json();
@@ -827,7 +827,7 @@
     try {
       const res = await fetch(API + `/api/admin/runs/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
         body: JSON.stringify({ distance: km })
       });
       const data = await res.json();
@@ -843,7 +843,7 @@
     try {
       const res = await fetch(API + `/api/admin/runs/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': 'Bearer ' + token }
+        headers: { 'Authorization': 'Bearer ' + adminToken }
       });
       const data = await res.json();
       if (data.success) {
@@ -907,7 +907,7 @@
     try {
       const res = await fetch(API + `/api/admin/runs/${runId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
         body: JSON.stringify({ distance: km })
       });
       const data = await res.json();
@@ -924,7 +924,7 @@
     try {
       const res = await fetch(API + `/api/admin/runs/${runId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': 'Bearer ' + token }
+        headers: { 'Authorization': 'Bearer ' + adminToken }
       });
       const data = await res.json();
       if (data.success) {
