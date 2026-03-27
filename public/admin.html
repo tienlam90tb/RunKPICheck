@@ -356,6 +356,32 @@
     </div>
   </div>
 
+  <!-- KPI Weekly Report -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <h2 style="margin:0;">Bao cao KPI tuan</h2>
+      <div id="week-range" style="color:#94a3b8;font-size:13px;"></div>
+    </div>
+    <div id="week-status" style="margin-bottom:12px;"></div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ten</th>
+            <th>Tong KM</th>
+            <th>So ngay chay</th>
+            <th>TB/ngay</th>
+            <th>Trang thai</th>
+          </tr>
+        </thead>
+        <tbody id="week-report-body">
+          <tr><td colspan="6" style="text-align:center;color:#64748b;padding:30px;">Dang tai...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- KPI Report -->
   <div class="card">
     <h2>Bao cao KPI thang nay</h2>
@@ -468,6 +494,7 @@
     document.getElementById('runs-date').value = today;
     loadEmployees();
     loadRuns(today);
+    loadWeekReport();
     loadReport();
   }
 
@@ -732,6 +759,54 @@
     a.click();
     URL.revokeObjectURL(url);
     showAlert('Da xuat file CSV', 'success');
+  }
+
+  // Load weekly report
+  const WEEKLY_KPI = 10; // KPI tuan: 10km
+  async function loadWeekReport() {
+    try {
+      const res = await fetch(API + '/api/admin/report-week', { headers: authHeaders() });
+      const result = await res.json();
+      const { data, start, end, isClosed } = result;
+
+      // Show week range
+      const fmt = d => { const p = d.split('-'); return p[2] + '/' + p[1]; };
+      document.getElementById('week-range').textContent = fmt(start) + ' → ' + fmt(end) + ' (16:00)';
+
+      // Show status
+      const statusEl = document.getElementById('week-status');
+      if (isClosed) {
+        statusEl.innerHTML = '<span style="background:#7f1d1d;color:#f87171;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;">Da dong (qua 16h thu 6)</span>';
+      } else {
+        statusEl.innerHTML = '<span style="background:#164e63;color:#22d3ee;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;">Dang mo</span>';
+      }
+
+      const tbody = document.getElementById('week-report-body');
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;">Chua co du lieu</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      data.sort((a, b) => b.total_km - a.total_km);
+      data.forEach((r, i) => {
+        const avg = r.run_days > 0 ? (r.total_km / r.run_days).toFixed(2) : '0.00';
+        const isPass = r.total_km >= WEEKLY_KPI;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${i + 1}</td>
+          <td><strong>${r.name}</strong></td>
+          <td>${r.total_km.toFixed(2)} km</td>
+          <td>${r.run_days} ngay</td>
+          <td>${avg} km</td>
+          <td><span class="badge ${isPass ? 'badge-ok' : 'badge-fail'}">${isPass ? 'Dat' : 'Chua dat'}</span></td>
+        `;
+        tbody.appendChild(row);
+      });
+    } catch (err) {
+      document.getElementById('week-report-body').innerHTML =
+        '<tr><td colspan="6" style="text-align:center;color:#f87171;">Loi tai du lieu</td></tr>';
+    }
   }
 
   // Load monthly report

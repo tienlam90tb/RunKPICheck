@@ -62,6 +62,28 @@ function vnMonthRange() {
   };
 }
 
+function vnWeekRange() {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+  const day = now.getDay(); // 0=Sun,1=Mon,...,6=Sat
+  // Find Monday of this week
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMon);
+  monday.setHours(0, 0, 0, 0);
+  // Friday of this week
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  // Check if past Friday 16:00 - if so, week is closed
+  const fridayCutoff = new Date(friday);
+  fridayCutoff.setHours(16, 0, 0, 0);
+  const isClosed = now >= fridayCutoff;
+  return {
+    start: monday.toLocaleDateString('en-CA'),
+    end: friday.toLocaleDateString('en-CA'),
+    isClosed
+  };
+}
+
 // ===== DATABASE (PostgreSQL) =====
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -271,6 +293,25 @@ app.get('/api/admin/report', async (req, res) => {
     );
     res.json(rows);
   } catch (err) { res.json([]); }
+});
+
+// Admin: weekly report
+app.get('/api/admin/report-week', async (req, res) => {
+  try {
+    const { start, end, isClosed } = vnWeekRange();
+    const { rows } = await pool.query(
+      `SELECT e.id as employee_id, e.name,
+         COALESCE(SUM(r.distance), 0)::float as total_km,
+         COUNT(DISTINCT r.date)::int as run_days
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN runs r ON (r.athlete_id = u.athlete_id OR r.athlete_id = 'manual_' || e.id)
+         AND r.date >= $1 AND r.date <= $2
+       GROUP BY e.id, e.name
+       ORDER BY total_km DESC`, [start, end]
+    );
+    res.json({ data: rows, start, end, isClosed });
+  } catch (err) { res.json({ data: [], start: '', end: '', isClosed: false }); }
 });
 
 // Admin: reset PIN
